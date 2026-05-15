@@ -5,12 +5,10 @@ const path = require('node:path');
 const test = require('node:test');
 const { gzipSync } = require('node:zlib');
 
-const {
-  buildComparisonReport,
-  createTarballFileMap,
-  extractTarGzEntries,
-  parseFilePaths,
-} = require('../lib/index.js');
+const { buildComparisonReport } = require('../lib/comparison.js');
+const { validateTarballUri } = require('../lib/config.js');
+const { parseFilePaths } = require('../lib/paths.js');
+const { createTarballFileMap, extractTarGzEntries } = require('../lib/tarball.js');
 
 function writeOctal(buffer, value, offset, length) {
   const octal = value.toString(8).padStart(length - 1, '0');
@@ -60,6 +58,21 @@ test('parseFilePaths returns normalized unique relative paths', () => {
 test('parseFilePaths rejects missing and unsafe paths', () => {
   assert.throws(() => parseFilePaths('\n'), /At least one file path/);
   assert.throws(() => parseFilePaths('../dist/a.js'), /must be relative/);
+  assert.throws(() => parseFilePaths('C:\\dist\\a.js'), /must be relative/);
+  assert.throws(() => parseFilePaths('C:/dist/a.js'), /must be relative/);
+  assert.throws(() => parseFilePaths('\\\\server\\share\\a.js'), /must be relative/);
+  assert.throws(() => parseFilePaths('//server/share/a.js'), /must be relative/);
+});
+
+test('validateTarballUri accepts HTTP and HTTPS tarball URIs', () => {
+  assert.equal(validateTarballUri(' https://example.com/archive.tgz '), 'https://example.com/archive.tgz');
+  assert.equal(validateTarballUri('http://example.com/archive.tgz'), 'http://example.com/archive.tgz');
+});
+
+test('validateTarballUri rejects missing, invalid, and unsupported URIs', () => {
+  assert.throws(() => validateTarballUri(''), /tarball-uri input is required/);
+  assert.throws(() => validateTarballUri('not a url'), /Invalid tarball URI/);
+  assert.throws(() => validateTarballUri('file:///tmp/archive.tgz'), /Unsupported tarball URI protocol/);
 });
 
 test('tarball file map strips a single package root directory', async () => {
@@ -67,6 +80,13 @@ test('tarball file map strips a single package root directory', async () => {
   const fileMap = createTarballFileMap(await extractTarGzEntries(archive));
 
   assert.equal(fileMap.get('dist/a.js').toString(), 'baseline');
+});
+
+test('extractTarGzEntries fails clearly for invalid gzip payloads', async () => {
+  await assert.rejects(
+    extractTarGzEntries(Buffer.from('<html>not a tarball</html>')),
+    /not a valid \.tar\.gz archive/,
+  );
 });
 
 test('buildComparisonReport measures gzip sizes and deltas', async () => {
@@ -101,6 +121,24 @@ test('buildComparisonReport fails when baseline file is missing', async () => {
     await assert.rejects(
       buildComparisonReport(localRoot, 'https://example.com/archive.tgz', ['dist-a.js'], new Map()),
       /Baseline file not found/,
+    );
+  } finally {
+    await rm(localRoot, { force: true, recursive: true });
+  }
+});
+
+test('buildComparisonReport fails when local file is missing', async () => {
+  const localRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-'));
+
+  try {
+    await assert.rejects(
+      buildComparisonReport(
+        localRoot,
+        'https://example.com/archive.tgz',
+        ['dist-a.js'],
+        new Map([['dist-a.js', Buffer.from('baseline artifact')]]),
+      ),
+      /Local file not found: dist-a\.js/,
     );
   } finally {
     await rm(localRoot, { force: true, recursive: true });

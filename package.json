@@ -8,7 +8,7 @@
     "compile": "tsc",
     "bundle": "ncc build lib/index.js --license licenses.txt -o dist",
     "lint": "tsc --noEmit",
-    "test": "pnpm run compile && node --test tests/*.test.js",
+    "test": "pnpm run compile && node --test",
     "clean": "rimraf lib dist"
   },
   "keywords": [
