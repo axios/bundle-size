@@ -1,8 +1,6 @@
 # Bundle Size Action
 
-A custom GitHub Action that checks and reports the bundle size of your project.
-
-This is the **v0.1 "Hello World" foundation**. The scaffolding is production-ready and intentionally minimal so that real bundle-size analysis logic can be layered on top without any structural rework.
+A custom GitHub Action that compares gzip bundle sizes for built artifacts against matching files from a tarball baseline.
 
 ---
 
@@ -16,7 +14,7 @@ This is the **v0.1 "Hello World" foundation**. The scaffolding is production-rea
 ├── tsconfig.json                 # TypeScript configuration
 ├── .gitignore
 ├── src/
-│   └── index.ts                  # Action entrypoint ← add logic here
+│   └── index.ts                  # Action entrypoint and comparison logic
 ├── dist/
 │   ├── index.js                  # Bundled action (committed, used at runtime)
 │   └── licenses.txt              # Third-party licence notices
@@ -35,39 +33,90 @@ This is the **v0.1 "Hello World" foundation**. The scaffolding is production-rea
 2. `pnpm run compile` (`tsc`) compiles `src/` → `lib/`.
 3. `pnpm run bundle` (`@vercel/ncc`) bundles `lib/index.js` and all dependencies into a single self-contained `dist/index.js`.
 4. `action.yml` points GitHub Actions at `dist/index.js` using the `node20` runner.
-5. When the workflow runs, GitHub reads `action.yml`, resolves the `path` input, and executes `dist/index.js` — no separate `npm install` step is needed at runtime.
+5. When the workflow runs, GitHub reads `action.yml`, resolves the inputs, and executes `dist/index.js` — no separate `npm install` step is needed at runtime.
 
 ---
 
 ## Inputs
 
-| Name   | Required | Default | Description                                              |
-|--------|----------|---------|----------------------------------------------------------|
-| `path` | No       | `.`     | Path to the project whose bundle size should be checked. |
+| Name | Required | Default | Description |
+|------|----------|---------|-------------|
+| `path` | No | `.` | Path to the local project root containing built artifacts. |
+| `tarball-uri` | Yes | | HTTP(S) URI of the `.tar.gz` baseline archive to compare against. |
+| `files` | Yes | | Newline-delimited file paths to compare in the local project and tarball baseline. |
+| `output-file` | No | `bundle-size-comparison.json` | Path, relative to `path`, where the JSON comparison report will be written. |
 
 ## Outputs
 
-| Name   | Description                                                           |
-|--------|-----------------------------------------------------------------------|
-| `size` | Total bundle size in bytes (placeholder until analysis is wired up). |
+| Name | Description |
+|------|-------------|
+| `size` | Total current gzip size in bytes for all compared files. |
+| `comparison-file` | Absolute path to the generated JSON comparison file. |
+| `total-current-gzip-size` | Total current gzip size in bytes for all compared files. |
+| `total-baseline-gzip-size` | Total baseline gzip size in bytes for all compared files. |
+| `total-delta-gzip-size` | Difference in gzip bytes between current and baseline totals. |
 
 ---
 
 ## Usage in a Workflow
 
+Build your project first, then run the action against the generated files. In pull request workflows, `actions/checkout` checks out the PR merge ref by default, so the local build represents the artifact sizes that would result after merge.
+
 ```yaml
-- name: Check Bundle Size
+- name: Install dependencies
+  run: pnpm install --frozen-lockfile
+
+- name: Build artifacts
+  run: pnpm run build
+
+- name: Compare Bundle Size
   uses: axios/bundle-size@main
   with:
     path: '.'
+    tarball-uri: 'https://registry.npmjs.org/axios/-/axios-1.6.8.tgz'
+    files: |
+      dist/axios.js
+      dist/axios.min.js
+      dist/browser/axios.cjs
+    output-file: 'bundle-size-comparison.json'
 ```
 
-Because this repository *is* the action, a workflow inside the same repo can reference it with `./`:
+The comparison file is JSON:
+
+```json
+{
+  "metric": "gzip",
+  "baseline": {
+    "uri": "https://registry.npmjs.org/axios/-/axios-1.6.8.tgz"
+  },
+  "localRoot": "/home/runner/work/project/project",
+  "files": [
+    {
+      "path": "dist/axios.min.js",
+      "baselineBytes": 14233,
+      "currentBytes": 14512,
+      "deltaBytes": 279,
+      "deltaPercent": 1.96
+    }
+  ],
+  "totals": {
+    "baselineBytes": 14233,
+    "currentBytes": 14512,
+    "deltaBytes": 279,
+    "deltaPercent": 1.96
+  }
+}
+```
+
+Because this repository *is* the action, a workflow inside the same repo can reference it with `./` after preparing local files to compare:
 
 ```yaml
 - uses: ./
   with:
-    path: '.'
+    path: 'bundle-size-fixture'
+    tarball-uri: 'https://registry.npmjs.org/is-number/-/is-number-7.0.0.tgz'
+    files: |
+      index.js
 ```
 
 See [`.github/workflows/bundle-size.yml`](.github/workflows/bundle-size.yml) for a complete example.
@@ -89,6 +138,9 @@ pnpm install
 
 # Type-check only (no output)
 pnpm run lint
+
+# Run tests
+pnpm test
 
 # Compile TypeScript → lib/
 pnpm run compile
@@ -130,36 +182,27 @@ node dist/index.js
 To simulate GitHub Actions inputs locally, set the corresponding environment variables before running:
 
 ```bash
-INPUT_PATH="./my-project" node dist/index.js
+INPUT_PATH="." \
+INPUT_TARBALL_URI="https://registry.npmjs.org/axios/-/axios-1.6.8.tgz" \
+INPUT_FILES=$'dist/axios.js\ndist/axios.min.js' \
+node dist/index.js
 ```
 
 ---
 
-## Where to Add Bundle-Size Logic
+## Current Behavior
 
-All future analysis code belongs in **`src/index.ts`** (or in helper modules imported from it). The `TODO` comment in that file marks the exact insertion point:
-
-```ts
-// TODO: add bundle-size analysis logic here.
-// Suggested extension points:
-//   - Build the project at `targetPath` and measure artifact sizes.
-//   - Compare sizes against a stored baseline.
-//   - Validate against a configurable threshold.
-//   - Post a summary comment on the pull request.
-//   - Upload a JSON size report as a workflow artifact.
-//   - Support multiple bundlers (Vite, Webpack, Next.js, …).
-```
+The action downloads the configured tarball, reads regular file entries, strips a single shared top-level directory such as `package/`, and compares the configured paths against local files under `path`. It measures gzip-compressed bytes for each file and writes a JSON report. It does not enforce budgets or target sizes.
 
 Suggested next steps:
 
 | Feature                          | Notes                                                       |
 |----------------------------------|-------------------------------------------------------------|
-| Baseline comparison              | Store a JSON file with previous sizes; compare on each run |
 | PR comment support               | Use `@actions/github` to post a Markdown table comment     |
 | Threshold validation             | Accept `max-size` input; call `core.setFailed` on breach   |
 | Artifact uploads                 | Use `actions/upload-artifact` to persist the size report   |
 | Multi-framework support          | Auto-detect `vite.config.*`, `webpack.config.*`, etc.      |
-| JSON output mode                 | Emit a structured JSON file for downstream consumers       |
+| Package URI resolution           | Resolve package manager aliases such as `npm:axios@latest` |
 
 ---
 

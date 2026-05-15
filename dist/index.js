@@ -39,36 +39,246 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseFilePaths = parseFilePaths;
+exports.extractTarGzEntries = extractTarGzEntries;
+exports.createTarballFileMap = createTarballFileMap;
+exports.buildComparisonReport = buildComparisonReport;
+exports.run = run;
 const core = __importStar(__nccwpck_require__(6966));
-/**
- * Main entrypoint for the Bundle Size Action.
- *
- * Currently logs a "Hello World" message together with the configured `path`
- * input.  All future bundle-size analysis logic should be added here (or
- * delegated to helper modules imported from this file).
- */
+const promises_1 = __nccwpck_require__(1455);
+const node_path_1 = __importDefault(__nccwpck_require__(6760));
+const node_util_1 = __nccwpck_require__(7975);
+const node_zlib_1 = __nccwpck_require__(8522);
+const gzipAsync = (0, node_util_1.promisify)(node_zlib_1.gzip);
+const gunzipAsync = (0, node_util_1.promisify)(node_zlib_1.gunzip);
+const TAR_BLOCK_SIZE = 512;
+function normalizeConfiguredPath(filePath) {
+    const normalized = node_path_1.default.posix.normalize(filePath.trim().replace(/\\/g, '/'));
+    if (!normalized || normalized === '.') {
+        throw new Error('Configured file paths must not be empty.');
+    }
+    if (normalized.startsWith('/') || normalized === '..' || normalized.startsWith('../')) {
+        throw new Error(`Configured file path must be relative and stay inside the project: ${filePath}`);
+    }
+    return normalized;
+}
+function parseFilePaths(input) {
+    const filePaths = input
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map(normalizeConfiguredPath);
+    if (filePaths.length === 0) {
+        throw new Error('At least one file path must be provided via the files input.');
+    }
+    return [...new Set(filePaths)];
+}
+function validateTarballUri(uri) {
+    const trimmedUri = uri.trim();
+    if (!trimmedUri) {
+        throw new Error('The tarball-uri input is required.');
+    }
+    let parsed;
+    try {
+        parsed = new URL(trimmedUri);
+    }
+    catch {
+        throw new Error(`Invalid tarball URI: ${uri}`);
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error(`Unsupported tarball URI protocol: ${parsed.protocol}`);
+    }
+    return trimmedUri;
+}
+function resolveInsideRoot(root, relativePath) {
+    const resolvedRoot = node_path_1.default.resolve(root);
+    const resolvedPath = node_path_1.default.resolve(resolvedRoot, relativePath);
+    const relativeFromRoot = node_path_1.default.relative(resolvedRoot, resolvedPath);
+    if (relativeFromRoot === '' || relativeFromRoot.startsWith('..') || node_path_1.default.isAbsolute(relativeFromRoot)) {
+        throw new Error(`Path must stay inside the project root: ${relativePath}`);
+    }
+    return resolvedPath;
+}
+function getConfig() {
+    const localRoot = node_path_1.default.resolve(core.getInput('path', { required: false }) || '.');
+    const tarballUri = validateTarballUri(core.getInput('tarball-uri', { required: true }));
+    const filesInput = core.getMultilineInput('files', { required: true }).join('\n');
+    const outputFile = normalizeConfiguredPath(core.getInput('output-file', { required: false }) || 'bundle-size-comparison.json');
+    return {
+        localRoot,
+        tarballUri,
+        filePaths: parseFilePaths(filesInput),
+        outputFile,
+    };
+}
+async function downloadTarball(uri) {
+    let response;
+    try {
+        response = await fetch(uri);
+    }
+    catch (error) {
+        throw new Error(`Failed to download tarball URI ${uri}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (!response.ok) {
+        throw new Error(`Failed to download tarball URI ${uri}: HTTP ${response.status} ${response.statusText}`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+}
+function readTarString(block, start, length) {
+    const raw = block.subarray(start, start + length);
+    const nullIndex = raw.indexOf(0);
+    const value = nullIndex === -1 ? raw : raw.subarray(0, nullIndex);
+    return value.toString('utf8').trim();
+}
+function readTarSize(block) {
+    const rawSize = readTarString(block, 124, 12).replace(/\0/g, '').trim();
+    return rawSize ? Number.parseInt(rawSize, 8) : 0;
+}
+function isEmptyTarBlock(block) {
+    return block.every((byte) => byte === 0);
+}
+function normalizeTarEntryPath(entryPath) {
+    return node_path_1.default.posix.normalize(entryPath.replace(/\\/g, '/')).replace(/^\.\//, '').replace(/^\/+/, '');
+}
+async function extractTarGzEntries(archive) {
+    const tar = await gunzipAsync(archive);
+    const entries = [];
+    let offset = 0;
+    while (offset + TAR_BLOCK_SIZE <= tar.length) {
+        const header = tar.subarray(offset, offset + TAR_BLOCK_SIZE);
+        if (isEmptyTarBlock(header)) {
+            break;
+        }
+        const name = readTarString(header, 0, 100);
+        const prefix = readTarString(header, 345, 155);
+        const entryPath = normalizeTarEntryPath(prefix ? `${prefix}/${name}` : name);
+        const size = readTarSize(header);
+        const type = readTarString(header, 156, 1);
+        const contentStart = offset + TAR_BLOCK_SIZE;
+        const contentEnd = contentStart + size;
+        if (contentEnd > tar.length) {
+            throw new Error(`Tarball entry is truncated: ${entryPath}`);
+        }
+        if (entryPath && (type === '' || type === '0')) {
+            entries.push({
+                path: entryPath,
+                content: Buffer.from(tar.subarray(contentStart, contentEnd)),
+            });
+        }
+        offset = contentStart + Math.ceil(size / TAR_BLOCK_SIZE) * TAR_BLOCK_SIZE;
+    }
+    if (entries.length === 0) {
+        throw new Error('Tarball did not contain any regular files.');
+    }
+    return entries;
+}
+function getSingleTopLevelDirectory(paths) {
+    const firstSegments = paths.map((entryPath) => entryPath.split('/')[0]).filter(Boolean);
+    const [firstSegment] = firstSegments;
+    if (!firstSegment || firstSegments.some((segment) => segment !== firstSegment)) {
+        return null;
+    }
+    return paths.every((entryPath) => entryPath.includes('/')) ? firstSegment : null;
+}
+function createTarballFileMap(entries) {
+    const fileMap = new Map();
+    const topLevelDirectory = getSingleTopLevelDirectory(entries.map((entry) => entry.path));
+    for (const entry of entries) {
+        fileMap.set(entry.path, entry.content);
+        if (topLevelDirectory && entry.path.startsWith(`${topLevelDirectory}/`)) {
+            fileMap.set(entry.path.slice(topLevelDirectory.length + 1), entry.content);
+        }
+    }
+    return fileMap;
+}
+async function gzipSize(content) {
+    const compressed = await gzipAsync(content, { level: node_zlib_1.constants.Z_BEST_COMPRESSION });
+    return compressed.length;
+}
+function percentDelta(currentBytes, baselineBytes) {
+    if (baselineBytes === 0) {
+        return null;
+    }
+    return Number((((currentBytes - baselineBytes) / baselineBytes) * 100).toFixed(2));
+}
+async function buildComparisonReport(localRoot, tarballUri, filePaths, baselineFiles) {
+    const files = [];
+    for (const filePath of filePaths) {
+        const baselineContent = baselineFiles.get(filePath);
+        if (!baselineContent) {
+            throw new Error(`Baseline file not found in tarball: ${filePath}`);
+        }
+        const localPath = resolveInsideRoot(localRoot, filePath);
+        let currentContent;
+        try {
+            currentContent = await (0, promises_1.readFile)(localPath);
+        }
+        catch (error) {
+            throw new Error(`Local file not found: ${filePath} (${error instanceof Error ? error.message : String(error)})`);
+        }
+        const baselineBytes = await gzipSize(baselineContent);
+        const currentBytes = await gzipSize(currentContent);
+        const deltaBytes = currentBytes - baselineBytes;
+        files.push({
+            path: filePath,
+            baselineBytes,
+            currentBytes,
+            deltaBytes,
+            deltaPercent: percentDelta(currentBytes, baselineBytes),
+        });
+    }
+    const baselineBytes = files.reduce((total, file) => total + file.baselineBytes, 0);
+    const currentBytes = files.reduce((total, file) => total + file.currentBytes, 0);
+    return {
+        metric: 'gzip',
+        baseline: {
+            uri: tarballUri,
+        },
+        localRoot,
+        files,
+        totals: {
+            baselineBytes,
+            currentBytes,
+            deltaBytes: currentBytes - baselineBytes,
+            deltaPercent: percentDelta(currentBytes, baselineBytes),
+        },
+    };
+}
+async function writeComparisonReport(localRoot, outputFile, report) {
+    const outputPath = resolveInsideRoot(localRoot, outputFile);
+    const outputDirectory = node_path_1.default.dirname(outputPath);
+    await (0, promises_1.mkdir)(outputDirectory, { recursive: true });
+    await (0, promises_1.writeFile)(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    return outputPath;
+}
 async function run() {
     try {
-        // Read the `path` input declared in action.yml.
-        const targetPath = core.getInput('path', { required: false }) || '.';
-        core.info('Hello World from Bundle Size Action');
-        core.info(`Target path: ${targetPath}`);
-        // TODO: add bundle-size analysis logic here.
-        // Suggested extension points:
-        //   - Build the project at `targetPath` and measure artifact sizes.
-        //   - Compare sizes against a stored baseline.
-        //   - Validate against a configurable threshold.
-        //   - Post a summary comment on the pull request.
-        //   - Upload a JSON size report as a workflow artifact.
-        //   - Support multiple bundlers (Vite, Webpack, Next.js, …).
-        core.setOutput('size', '0');
+        const config = getConfig();
+        core.info(`Local project root: ${config.localRoot}`);
+        core.info(`Baseline tarball URI: ${config.tarballUri}`);
+        core.info(`Comparing ${config.filePaths.length} file(s) using gzip size.`);
+        const archive = await downloadTarball(config.tarballUri);
+        const baselineFiles = createTarballFileMap(await extractTarGzEntries(archive));
+        const report = await buildComparisonReport(config.localRoot, config.tarballUri, config.filePaths, baselineFiles);
+        const outputPath = await writeComparisonReport(config.localRoot, config.outputFile, report);
+        core.info(`Wrote bundle size comparison file: ${outputPath}`);
+        core.setOutput('comparison-file', outputPath);
+        core.setOutput('size', String(report.totals.currentBytes));
+        core.setOutput('total-current-gzip-size', String(report.totals.currentBytes));
+        core.setOutput('total-baseline-gzip-size', String(report.totals.baselineBytes));
+        core.setOutput('total-delta-gzip-size', String(report.totals.deltaBytes));
     }
     catch (error) {
         core.setFailed(error instanceof Error ? error.message : String(error));
     }
 }
-run();
+if (require.main === require.cache[eval('__filename')]) {
+    void run();
+}
 //# sourceMappingURL=index.js.map
 
 /***/ }),
@@ -25835,6 +26045,22 @@ module.exports = require("node:events");
 
 /***/ }),
 
+/***/ 1455:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:fs/promises");
+
+/***/ }),
+
+/***/ 6760:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:path");
+
+/***/ }),
+
 /***/ 7075:
 /***/ ((module) => {
 
@@ -25848,6 +26074,14 @@ module.exports = require("node:stream");
 
 "use strict";
 module.exports = require("node:util");
+
+/***/ }),
+
+/***/ 8522:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:zlib");
 
 /***/ }),
 
