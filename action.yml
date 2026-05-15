@@ -1,0 +1,21 @@
+name: 'Bundle Size Action'
+description: 'Reports the bundle size of your project. Currently a Hello World foundation ready for bundle-size logic.'
+author: 'axios'
+
+branding:
+  icon: 'package'
+  color: 'blue'
+
+inputs:
+  path:
+    description: 'Path to the project whose bundle size should be checked.'
+    required: false
+    default: '.'
+
+outputs:
+  size:
+    description: 'Total bundle size in bytes (placeholder – will be populated once analysis is implemented).'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

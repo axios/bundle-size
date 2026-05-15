@@ -1,0 +1,26 @@
+name: Bundle Size Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  bundle-size:
+    name: Check Bundle Size
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Run the bundle-size action that lives in this repository.
+      # Because the action is defined here, we reference it with the
+      # special `./` prefix so GitHub Actions resolves it locally.
+      - name: Run Bundle Size Action
+        uses: ./
+        with:
+          path: '.'

@@ -1,0 +1,33 @@
+{
+  "name": "bundle-size-action",
+  "version": "0.1.0",
+  "description": "A GitHub Action to check and report bundle sizes",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "pnpm run compile && pnpm run bundle",
+    "compile": "tsc",
+    "bundle": "ncc build lib/index.js --license licenses.txt -o dist",
+    "lint": "tsc --noEmit",
+    "clean": "rimraf lib dist"
+  },
+  "keywords": [
+    "github-action",
+    "bundle-size",
+    "ci"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.18",
+    "@vercel/ncc": "^0.38.3",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

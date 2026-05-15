@@ -1,0 +1,9 @@
+# Dependencies
+node_modules/
+
+# TypeScript intermediate output (not needed in the repo; dist/ IS needed)
+lib/
+
+# Miscellaneous
+*.log
+.DS_Store
