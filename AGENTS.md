@@ -74,6 +74,10 @@ The report shape should remain machine-readable JSON first. Markdown summaries, 
 
 Tests live in `tests/` and run against compiled `lib/` files, so `pnpm test` compiles first.
 
+Every code change in this repo should include corresponding tests. Treat tests as part of the change, not optional follow-up work. If a change truly cannot be tested, explicitly explain why in the implementation notes or OpenSpec tasks.
+
+Prefer module-aligned tests: source behavior in `src/<module>.ts` should be covered by `tests/<module>.test.js`, except `src/index.ts` when it remains only a bootstrap/re-export surface. Interface-only files such as `src/types.ts` are covered by TypeScript compilation unless they gain runtime behavior.
+
 Cover these behaviors when changing comparison logic:
 
 - Input path parsing and rejection of unsafe paths.

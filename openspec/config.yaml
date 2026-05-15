@@ -43,6 +43,13 @@ context: |
 
   Testing expectations:
   - pnpm test compiles TypeScript and runs Node tests against lib/.
+  - Every code change should include corresponding tests in the same change.
+    If a change truly cannot be tested, the reason must be explicit in the
+    implementation notes or tasks.
+  - Prefer module-aligned tests under tests/<module>.test.js for behavior in
+    src/<module>.ts. src/index.ts is exempt while it remains only bootstrap and
+    re-exports; src/types.ts is covered by TypeScript compilation unless it gains
+    runtime behavior.
   - pnpm run build must be run for runtime, dependency, action metadata, or dist changes.
   - Cover path safety, tarball extraction/root stripping, missing file failures,
     gzip sizing, and report shape when changing comparison behavior.
@@ -54,14 +61,17 @@ rules:
     - Identify whether dist/index.js, action.yml, README, tests, or OpenSpec main specs will be affected.
   design:
     - Prefer extending the existing focused modules over adding logic to src/index.ts.
+    - Include the testing approach for any code change; if no test is planned, explain why.
     - Document path safety, tarball layout assumptions, gzip semantics, and failure modes when relevant.
     - Call out any new runtime dependency and justify why Node built-ins are not sufficient.
   specs:
     - Requirements must be testable and use SHALL/MUST language.
+    - New or modified behavior requirements must imply concrete test coverage.
     - Keep report-only behavior separate from budget or threshold enforcement requirements.
     - Treat package-manager shorthand such as npm:axios@latest as a separate capability from explicit tarball URI support.
   tasks:
-    - Include tests for behavior changes.
+    - Include tests for every code change, not only behavior changes.
+    - If a task cannot include tests, add an explicit task or note explaining why.
     - Include pnpm test verification for behavior changes.
     - Include pnpm run build and dist/index.js updates for runtime, dependency, action metadata, or generated output changes.
     - Include documentation updates when inputs, outputs, workflow usage, or report shape changes.
