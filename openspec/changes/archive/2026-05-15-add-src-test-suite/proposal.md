@@ -15,7 +15,7 @@ The current test suite is concentrated in a single catch-all test file and only 
 
 ### New Capabilities
 
-- None. This change improves test coverage and organization without adding user-facing behavior.
+- `source-test-suite`: Defines the expected module-aligned test coverage for the source files in this action.
 
 ### Modified Capabilities
 
