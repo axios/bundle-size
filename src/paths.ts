@@ -52,7 +52,8 @@ export function resolveInsideRoot(root: string, relativePath: string): string {
 
   if (
     relativeFromRoot === "" ||
-    relativeFromRoot.startsWith("..") ||
+    relativeFromRoot === ".." ||
+    relativeFromRoot.startsWith(`..${path.sep}`) ||
     path.isAbsolute(relativeFromRoot)
   ) {
     throw new Error(`Path must stay inside the project root: ${relativePath}`);

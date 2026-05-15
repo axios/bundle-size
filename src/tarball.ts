@@ -34,9 +34,24 @@ function readTarString(block: Buffer, start: number, length: number): string {
   return value.toString("utf8").trim();
 }
 
-function readTarSize(block: Buffer): number {
+function readTarSize(block: Buffer, entryPath: string): number {
   const rawSize = readTarString(block, 124, 12).replace(/\0/g, "").trim();
-  return rawSize ? Number.parseInt(rawSize, 8) : 0;
+
+  if (!rawSize) {
+    return 0;
+  }
+
+  if (!/^[0-7]+$/.test(rawSize)) {
+    throw new Error(`Tarball entry has invalid size field: ${entryPath}`);
+  }
+
+  const size = Number.parseInt(rawSize, 8);
+
+  if (!Number.isSafeInteger(size)) {
+    throw new Error(`Tarball entry size is too large: ${entryPath}`);
+  }
+
+  return size;
 }
 
 function isEmptyTarBlock(block: Buffer): boolean {
@@ -78,7 +93,7 @@ export async function extractTarGzEntries(
     const entryPath = normalizeTarEntryPath(
       prefix ? `${prefix}/${name}` : name,
     );
-    const size = readTarSize(header);
+    const size = readTarSize(header, entryPath);
     const type = readTarString(header, 156, 1);
     const contentStart = offset + TAR_BLOCK_SIZE;
     const contentEnd = contentStart + size;

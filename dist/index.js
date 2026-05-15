@@ -271,7 +271,8 @@ function resolveInsideRoot(root, relativePath) {
     const resolvedPath = node_path_1.default.resolve(resolvedRoot, relativePath);
     const relativeFromRoot = node_path_1.default.relative(resolvedRoot, resolvedPath);
     if (relativeFromRoot === "" ||
-        relativeFromRoot.startsWith("..") ||
+        relativeFromRoot === ".." ||
+        relativeFromRoot.startsWith(`..${node_path_1.default.sep}`) ||
         node_path_1.default.isAbsolute(relativeFromRoot)) {
         throw new Error(`Path must stay inside the project root: ${relativePath}`);
     }
@@ -341,9 +342,19 @@ function readTarString(block, start, length) {
     const value = nullIndex === -1 ? raw : raw.subarray(0, nullIndex);
     return value.toString("utf8").trim();
 }
-function readTarSize(block) {
+function readTarSize(block, entryPath) {
     const rawSize = readTarString(block, 124, 12).replace(/\0/g, "").trim();
-    return rawSize ? Number.parseInt(rawSize, 8) : 0;
+    if (!rawSize) {
+        return 0;
+    }
+    if (!/^[0-7]+$/.test(rawSize)) {
+        throw new Error(`Tarball entry has invalid size field: ${entryPath}`);
+    }
+    const size = Number.parseInt(rawSize, 8);
+    if (!Number.isSafeInteger(size)) {
+        throw new Error(`Tarball entry size is too large: ${entryPath}`);
+    }
+    return size;
 }
 function isEmptyTarBlock(block) {
     return block.every((byte) => byte === 0);
@@ -372,7 +383,7 @@ async function extractTarGzEntries(archive) {
         const name = readTarString(header, 0, 100);
         const prefix = readTarString(header, 345, 155);
         const entryPath = normalizeTarEntryPath(prefix ? `${prefix}/${name}` : name);
-        const size = readTarSize(header);
+        const size = readTarSize(header, entryPath);
         const type = readTarString(header, 156, 1);
         const contentStart = offset + TAR_BLOCK_SIZE;
         const contentEnd = contentStart + size;

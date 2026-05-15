@@ -7,7 +7,7 @@ const { gzipSync } = require('node:zlib');
 
 const { buildComparisonReport } = require('../lib/comparison.js');
 const { validateTarballUri } = require('../lib/config.js');
-const { parseFilePaths } = require('../lib/paths.js');
+const { parseFilePaths, resolveInsideRoot } = require('../lib/paths.js');
 const { createTarballFileMap, extractTarGzEntries } = require('../lib/tarball.js');
 
 function writeOctal(buffer, value, offset, length) {
@@ -51,6 +51,28 @@ function createTar(entries) {
   return Buffer.concat(blocks);
 }
 
+function createTarWithRawSize(entryPath, rawSize) {
+  const header = Buffer.alloc(512);
+
+  header.write(entryPath, 0, 100, 'utf8');
+  writeOctal(header, 0o644, 100, 8);
+  writeOctal(header, 0, 108, 8);
+  writeOctal(header, 0, 116, 8);
+  header.write(rawSize, 124, 12, 'ascii');
+  writeOctal(header, 0, 136, 12);
+  header.fill(' ', 148, 156);
+  header.write('0', 156, 1, 'ascii');
+  header.write('ustar\0', 257, 6, 'ascii');
+  header.write('00', 263, 2, 'ascii');
+
+  const checksum = [...header].reduce((total, byte) => total + byte, 0);
+  header.write(checksum.toString(8).padStart(6, '0'), 148, 6, 'ascii');
+  header[154] = 0;
+  header[155] = 32;
+
+  return Buffer.concat([header, Buffer.alloc(1024)]);
+}
+
 test('parseFilePaths returns normalized unique relative paths', () => {
   assert.deepEqual(parseFilePaths('dist/a.js\n./dist/a.js\ndist/b.js\n'), ['dist/a.js', 'dist/b.js']);
 });
@@ -62,6 +84,14 @@ test('parseFilePaths rejects missing and unsafe paths', () => {
   assert.throws(() => parseFilePaths('C:/dist/a.js'), /must be relative/);
   assert.throws(() => parseFilePaths('\\\\server\\share\\a.js'), /must be relative/);
   assert.throws(() => parseFilePaths('//server/share/a.js'), /must be relative/);
+});
+
+test('resolveInsideRoot allows in-root paths that start with dots', () => {
+  const root = path.join(os.tmpdir(), 'bundle-size-root');
+
+  assert.equal(resolveInsideRoot(root, '..foo/a.js'), path.join(root, '..foo/a.js'));
+  assert.throws(() => resolveInsideRoot(root, '../a.js'), /stay inside/);
+  assert.throws(() => resolveInsideRoot(root, '..'), /stay inside/);
 });
 
 test('validateTarballUri accepts HTTP and HTTPS tarball URIs', () => {
@@ -86,6 +116,15 @@ test('extractTarGzEntries fails clearly for invalid gzip payloads', async () => 
   await assert.rejects(
     extractTarGzEntries(Buffer.from('<html>not a tarball</html>')),
     /not a valid \.tar\.gz archive/,
+  );
+});
+
+test('extractTarGzEntries fails clearly for malformed tar size fields', async () => {
+  const archive = gzipSync(createTarWithRawSize('package/dist/a.js', 'invalid'));
+
+  await assert.rejects(
+    extractTarGzEntries(archive),
+    /invalid size field: package\/dist\/a\.js/,
   );
 });
 
