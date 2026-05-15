@@ -17,10 +17,34 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build action bundle
+        run: pnpm run build
+
+      - name: Prepare comparison fixture
+        run: |
+          mkdir -p bundle-size-fixture
+          printf 'module.exports = true;\n' > bundle-size-fixture/index.js
+
       # Run the bundle-size action that lives in this repository.
       # Because the action is defined here, we reference it with the
       # special `./` prefix so GitHub Actions resolves it locally.
       - name: Run Bundle Size Action
         uses: ./
         with:
-          path: '.'
+          path: 'bundle-size-fixture'
+          tarball-uri: 'https://registry.npmjs.org/is-number/-/is-number-7.0.0.tgz'
+          files: |
+            index.js
+          output-file: 'bundle-size-comparison.json'

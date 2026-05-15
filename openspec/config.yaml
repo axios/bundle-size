@@ -1,20 +1,67 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  This repo is a TypeScript GitHub Action for comparing bundle sizes. The action
+  runs from the committed dist/index.js bundle, not directly from src/.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Runtime and tooling:
+  - Node 20 GitHub Action.
+  - PNPM is the package manager and is pinned in package.json.
+  - Source is TypeScript under src/ and compiles to lib/.
+  - @vercel/ncc bundles lib/index.js into dist/index.js.
+  - Runtime dependencies should stay small; prefer Node built-ins when clear.
+
+  Current behavior:
+  - Accepts a tarball-uri baseline archive.
+  - Accepts newline-delimited files to compare.
+  - Resolves local files under path.
+  - Resolves tarball files relative to the archive root, stripping a single
+    shared top-level directory such as package/.
+  - Measures gzip-compressed byte size.
+  - Writes a JSON comparison report.
+  - Does not enforce budgets, thresholds, or target sizes.
+
+  Source layout:
+  - src/index.ts is a thin bootstrap/re-export surface.
+  - src/action.ts orchestrates the action run and action outputs.
+  - src/config.ts reads and validates @actions/core inputs.
+  - src/paths.ts normalizes configured paths and prevents path traversal.
+  - src/tarball.ts downloads tarballs and extracts regular files from .tar.gz archives.
+  - src/comparison.ts computes gzip sizes and per-file/totals deltas.
+  - src/report.ts writes the JSON comparison report.
+  - src/types.ts contains shared data types.
+
+  Design constraints:
+  - Do not build the target project inside the action; workflows build artifacts first.
+  - Treat missing configured files as errors.
+  - Configured file paths are user-facing paths, not archive-internal paths.
+  - Preserve path as the local project root; do not overload it with baseline semantics.
+  - Gzip size is the current canonical metric.
+  - JSON reports are the machine-readable source of truth. Markdown summaries,
+    PR comments, artifact uploads, and threshold enforcement are separate capabilities.
+  - Keep dist/index.js synchronized with src/ for runtime changes.
+
+  Testing expectations:
+  - pnpm test compiles TypeScript and runs Node tests against lib/.
+  - pnpm run build must be run for runtime, dependency, action metadata, or dist changes.
+  - Cover path safety, tarball extraction/root stripping, missing file failures,
+    gzip sizing, and report shape when changing comparison behavior.
+
+rules:
+  proposal:
+    - Keep proposals scoped to one capability or tightly related behavior change.
+    - Include explicit non-goals when a change might be confused with threshold enforcement, PR comments, package URI resolution, or build orchestration.
+    - Identify whether dist/index.js, action.yml, README, tests, or OpenSpec main specs will be affected.
+  design:
+    - Prefer extending the existing focused modules over adding logic to src/index.ts.
+    - Document path safety, tarball layout assumptions, gzip semantics, and failure modes when relevant.
+    - Call out any new runtime dependency and justify why Node built-ins are not sufficient.
+  specs:
+    - Requirements must be testable and use SHALL/MUST language.
+    - Keep report-only behavior separate from budget or threshold enforcement requirements.
+    - Treat package-manager shorthand such as npm:axios@latest as a separate capability from explicit tarball URI support.
+  tasks:
+    - Include tests for behavior changes.
+    - Include pnpm test verification for behavior changes.
+    - Include pnpm run build and dist/index.js updates for runtime, dependency, action metadata, or generated output changes.
+    - Include documentation updates when inputs, outputs, workflow usage, or report shape changes.

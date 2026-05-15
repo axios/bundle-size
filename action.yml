@@ -1,5 +1,5 @@
 name: 'Bundle Size Action'
-description: 'Reports the bundle size of your project. Currently a Hello World foundation ready for bundle-size logic.'
+description: 'Compares local build artifact gzip sizes against matching files from a tarball baseline.'
 author: 'axios'
 
 branding:
@@ -8,13 +8,31 @@ branding:
 
 inputs:
   path:
-    description: 'Path to the project whose bundle size should be checked.'
+    description: 'Path to the local project root containing built artifacts.'
     required: false
     default: '.'
+  tarball-uri:
+    description: 'HTTP(S) URI of the .tar.gz baseline archive to compare against.'
+    required: true
+  files:
+    description: 'Newline-delimited file paths to compare in the local project and tarball baseline.'
+    required: true
+  output-file:
+    description: 'Path, relative to the local project root, where the JSON comparison report will be written.'
+    required: false
+    default: 'bundle-size-comparison.json'
 
 outputs:
   size:
-    description: 'Total bundle size in bytes (placeholder – will be populated once analysis is implemented).'
+    description: 'Total current gzip size in bytes for all compared files.'
+  comparison-file:
+    description: 'Absolute path to the generated JSON comparison file.'
+  total-current-gzip-size:
+    description: 'Total current gzip size in bytes for all compared files.'
+  total-baseline-gzip-size:
+    description: 'Total baseline gzip size in bytes for all compared files.'
+  total-delta-gzip-size:
+    description: 'Difference in gzip bytes between current and baseline totals.'
 
 runs:
   using: 'node20'
