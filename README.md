@@ -45,6 +45,8 @@ A custom GitHub Action that compares gzip bundle sizes for built artifacts again
 | `tarball-uri` | Yes | | HTTP(S) URI of the `.tar.gz` baseline archive to compare against. |
 | `files` | Yes | | Newline-delimited file paths to compare in the local project and tarball baseline. |
 | `output-file` | No | `bundle-size-comparison.json` | Path, relative to `path`, where the JSON comparison report will be written. |
+| `comment-pr` | No | `false` | Post or update a bundle size summary comment on pull requests. |
+| `github-token` | No | | GitHub token used to post pull request comments when `comment-pr` is enabled. |
 
 ## Outputs
 
@@ -63,23 +65,54 @@ A custom GitHub Action that compares gzip bundle sizes for built artifacts again
 Build your project first, then run the action against the generated files. In pull request workflows, `actions/checkout` checks out the PR merge ref by default, so the local build represents the artifact sizes that would result after merge.
 
 ```yaml
-- name: Install dependencies
-  run: pnpm install --frozen-lockfile
+permissions:
+  contents: read
 
-- name: Build artifacts
-  run: pnpm run build
+steps:
+  - name: Install dependencies
+    run: pnpm install --frozen-lockfile
 
-- name: Compare Bundle Size
-  uses: axios/bundle-size@main
-  with:
-    path: '.'
-    tarball-uri: 'https://registry.npmjs.org/axios/-/axios-1.6.8.tgz'
-    files: |
-      dist/axios.js
-      dist/axios.min.js
-      dist/browser/axios.cjs
-    output-file: 'bundle-size-comparison.json'
+  - name: Build artifacts
+    run: pnpm run build
+
+  - name: Compare Bundle Size
+    uses: axios/bundle-size@main
+    with:
+      path: '.'
+      tarball-uri: 'https://registry.npmjs.org/axios/-/axios-1.6.8.tgz'
+      files: |
+        dist/axios.js
+        dist/axios.min.js
+        dist/browser/axios.cjs
+      output-file: 'bundle-size-comparison.json'
 ```
+
+To post the comparison directly on pull requests, enable `comment-pr` and provide a token with comment write permission:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+steps:
+  - name: Install dependencies
+    run: pnpm install --frozen-lockfile
+
+  - name: Build artifacts
+    run: pnpm run build
+
+  - name: Compare Bundle Size
+    uses: axios/bundle-size@main
+    with:
+      tarball-uri: 'https://registry.npmjs.org/axios/-/axios-1.6.8.tgz'
+      files: |
+        dist/axios.js
+        dist/axios.min.js
+      comment-pr: true
+      github-token: ${{ github.token }}
+```
+
+When `comment-pr` is enabled outside a pull request event, the action writes the JSON report and skips commenting. Fork pull requests can receive read-only tokens depending on repository settings; in that case GitHub may reject comment creation with a permissions error.
 
 The comparison file is JSON:
 
@@ -198,7 +231,6 @@ Suggested next steps:
 
 | Feature                          | Notes                                                       |
 |----------------------------------|-------------------------------------------------------------|
-| PR comment support               | Use `@actions/github` to post a Markdown table comment     |
 | Threshold validation             | Accept `max-size` input; call `core.setFailed` on breach   |
 | Artifact uploads                 | Use `actions/upload-artifact` to persist the size report   |
 | Multi-framework support          | Auto-detect `vite.config.*`, `webpack.config.*`, etc.      |

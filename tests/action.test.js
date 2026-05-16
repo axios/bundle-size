@@ -88,6 +88,8 @@ async function withActionEnvironment(env, callback) {
     'INPUT_TARBALL-URI',
     'INPUT_FILES',
     'INPUT_OUTPUT-FILE',
+    'INPUT_COMMENT-PR',
+    'INPUT_GITHUB-TOKEN',
   ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
   const previousExitCode = process.exitCode;

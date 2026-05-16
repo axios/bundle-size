@@ -9,6 +9,8 @@ const INPUT_KEYS = [
   'INPUT_TARBALL-URI',
   'INPUT_FILES',
   'INPUT_OUTPUT-FILE',
+  'INPUT_COMMENT-PR',
+  'INPUT_GITHUB-TOKEN',
 ];
 
 async function withInputs(inputs, callback) {
@@ -58,6 +60,8 @@ test('getConfig reads defaults and parses multiline files input', async () => {
         tarballUri: 'https://example.com/archive.tgz',
         filePaths: ['dist/a.js', 'dist/b.js'],
         outputFile: 'bundle-size-comparison.json',
+        commentPr: false,
+        githubToken: '',
       });
     },
   );
@@ -77,7 +81,43 @@ test('getConfig reads explicit path and output file inputs', async () => {
         tarballUri: 'https://example.com/archive.tgz',
         filePaths: ['dist/a.js'],
         outputFile: 'reports/result.json',
+        commentPr: false,
+        githubToken: '',
       });
+    },
+  );
+});
+
+test('getConfig reads PR comment inputs', async () => {
+  await withInputs(
+    {
+      'INPUT_TARBALL-URI': 'https://example.com/archive.tgz',
+      INPUT_FILES: 'dist/a.js',
+      'INPUT_COMMENT-PR': 'true',
+      'INPUT_GITHUB-TOKEN': 'token-value',
+    },
+    () => {
+      assert.deepEqual(getConfig(), {
+        localRoot: path.resolve('.'),
+        tarballUri: 'https://example.com/archive.tgz',
+        filePaths: ['dist/a.js'],
+        outputFile: 'bundle-size-comparison.json',
+        commentPr: true,
+        githubToken: 'token-value',
+      });
+    },
+  );
+});
+
+test('getConfig requires github-token when PR comments are enabled', async () => {
+  await withInputs(
+    {
+      'INPUT_TARBALL-URI': 'https://example.com/archive.tgz',
+      INPUT_FILES: 'dist/a.js',
+      'INPUT_COMMENT-PR': 'true',
+    },
+    () => {
+      assert.throws(() => getConfig(), /github-token input is required/);
     },
   );
 });
