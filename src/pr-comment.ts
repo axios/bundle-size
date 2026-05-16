@@ -5,6 +5,10 @@ import { BUNDLE_SIZE_COMMENT_MARKER } from "./comment";
 interface IssueComment {
   id: number;
   body?: string;
+  user?: {
+    login?: string;
+    type?: string;
+  };
 }
 
 interface PullRequestPayload {
@@ -91,6 +95,14 @@ async function requestGitHub<T>(
   return (await response.json()) as T;
 }
 
+function isActionAuthoredBundleSizeComment(comment: IssueComment): boolean {
+  return (
+    comment.body?.includes(BUNDLE_SIZE_COMMENT_MARKER) === true &&
+    comment.user?.login === "github-actions[bot]" &&
+    comment.user.type === "Bot"
+  );
+}
+
 export async function upsertPullRequestComment(
   token: string,
   body: string,
@@ -109,9 +121,7 @@ export async function upsertPullRequestComment(
     "GET",
     `${apiRoot}/issues/${pullRequestNumber}/comments?per_page=100`,
   );
-  const existingComment = comments.find((comment) =>
-    comment.body?.includes(BUNDLE_SIZE_COMMENT_MARKER),
-  );
+  const existingComment = comments.find(isActionAuthoredBundleSizeComment);
 
   if (existingComment) {
     await requestGitHub<IssueComment>(

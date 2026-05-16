@@ -66,7 +66,11 @@ test('upsertPullRequestComment updates an existing marked comment', async () => 
 
       if (options.method === 'GET') {
         return jsonResponse(200, [
-          { id: 12, body: `existing\n${BUNDLE_SIZE_COMMENT_MARKER}` },
+          {
+            id: 12,
+            body: `existing\n${BUNDLE_SIZE_COMMENT_MARKER}`,
+            user: { login: 'github-actions[bot]', type: 'Bot' },
+          },
         ]);
       }
 
@@ -83,6 +87,40 @@ test('upsertPullRequestComment updates an existing marked comment', async () => 
     assert.equal(requests.length, 2);
     assert.equal(requests[0].url, 'https://api.github.com/repos/axios/bundle-size/issues/42/comments?per_page=100');
     assert.equal(requests[0].options.headers.authorization, 'Bearer token-value');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('upsertPullRequestComment ignores marked comments from other authors', async () => {
+  const originalFetch = global.fetch;
+  const requests = [];
+
+  try {
+    global.fetch = async (url, options) => {
+      requests.push({ url, options });
+
+      if (options.method === 'GET') {
+        return jsonResponse(200, [
+          {
+            id: 12,
+            body: `user collision\n${BUNDLE_SIZE_COMMENT_MARKER}`,
+            user: { login: 'octocat', type: 'User' },
+          },
+        ]);
+      }
+
+      assert.equal(options.method, 'POST');
+      assert.equal(url, 'https://api.github.com/repos/axios/bundle-size/issues/42/comments');
+      assert.deepEqual(JSON.parse(options.body), { body: 'new body' });
+      return jsonResponse(201, { id: 13, body: 'new body' });
+    };
+
+    await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
+      await upsertPullRequestComment('token-value', 'new body');
+    });
+
+    assert.equal(requests.length, 2);
   } finally {
     global.fetch = originalFetch;
   }

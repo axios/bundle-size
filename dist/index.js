@@ -458,6 +458,11 @@ async function requestGitHub(token, method, url, body) {
     }
     return (await response.json());
 }
+function isActionAuthoredBundleSizeComment(comment) {
+    return (comment.body?.includes(comment_1.BUNDLE_SIZE_COMMENT_MARKER) === true &&
+        comment.user?.login === "github-actions[bot]" &&
+        comment.user.type === "Bot");
+}
 async function upsertPullRequestComment(token, body) {
     const pullRequestNumber = await getPullRequestNumberFromEvent();
     if (pullRequestNumber === null) {
@@ -467,7 +472,7 @@ async function upsertPullRequestComment(token, body) {
     const { owner, repo } = getRepository();
     const apiRoot = `https://api.github.com/repos/${owner}/${repo}`;
     const comments = await requestGitHub(token, "GET", `${apiRoot}/issues/${pullRequestNumber}/comments?per_page=100`);
-    const existingComment = comments.find((comment) => comment.body?.includes(comment_1.BUNDLE_SIZE_COMMENT_MARKER));
+    const existingComment = comments.find(isActionAuthoredBundleSizeComment);
     if (existingComment) {
         await requestGitHub(token, "PATCH", `${apiRoot}/issues/comments/${existingComment.id}`, { body });
         core.info("Updated existing bundle size PR comment.");
