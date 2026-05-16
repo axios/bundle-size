@@ -35,11 +35,14 @@ async function withGithubEnvironment(payload, callback) {
   }
 }
 
-function jsonResponse(status, body) {
+function jsonResponse(status, body, headers = {}) {
   return {
     ok: status >= 200 && status < 300,
     status,
     statusText: status === 403 ? 'Forbidden' : 'OK',
+    headers: {
+      get: (name) => headers[name.toLowerCase()] ?? null,
+    },
     json: async () => body,
   };
 }
@@ -121,6 +124,53 @@ test('upsertPullRequestComment ignores marked comments from other authors', asyn
     });
 
     assert.equal(requests.length, 2);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('upsertPullRequestComment searches paginated comments before creating', async () => {
+  const originalFetch = global.fetch;
+  const requests = [];
+  const nextUrl = 'https://api.github.com/repos/axios/bundle-size/issues/42/comments?per_page=100&page=2';
+
+  try {
+    global.fetch = async (url, options) => {
+      requests.push({ url, options });
+
+      if (options.method === 'GET' && !String(url).includes('page=2')) {
+        return jsonResponse(
+          200,
+          [{ id: 1, body: 'first page comment' }],
+          { link: `<${nextUrl}>; rel="next"` },
+        );
+      }
+
+      if (options.method === 'GET') {
+        assert.equal(url, nextUrl);
+        return jsonResponse(200, [
+          {
+            id: 99,
+            body: `second page\n${BUNDLE_SIZE_COMMENT_MARKER}`,
+            user: { login: 'github-actions[bot]', type: 'Bot' },
+          },
+        ]);
+      }
+
+      assert.equal(options.method, 'PATCH');
+      assert.equal(url, 'https://api.github.com/repos/axios/bundle-size/issues/comments/99');
+      assert.deepEqual(JSON.parse(options.body), { body: 'new body' });
+      return jsonResponse(200, { id: 99, body: 'new body' });
+    };
+
+    await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
+      await upsertPullRequestComment('token-value', 'new body');
+    });
+
+    assert.deepEqual(
+      requests.map((request) => request.options.method),
+      ['GET', 'GET', 'PATCH'],
+    );
   } finally {
     global.fetch = originalFetch;
   }

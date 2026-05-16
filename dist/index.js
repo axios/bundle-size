@@ -437,7 +437,20 @@ async function parseErrorMessage(response) {
         return "";
     }
 }
-async function requestGitHub(token, method, url, body) {
+function parseNextLink(linkHeader) {
+    if (!linkHeader) {
+        return null;
+    }
+    for (const link of linkHeader.split(",")) {
+        if (!link.includes('rel="next"')) {
+            continue;
+        }
+        const match = /<([^>]+)>/.exec(link);
+        return match?.[1] ?? null;
+    }
+    return null;
+}
+async function requestGitHubPage(token, method, url, body) {
     const response = await fetch(url, {
         method,
         headers: {
@@ -456,12 +469,31 @@ async function requestGitHub(token, method, url, body) {
             : "";
         throw new Error(`GitHub comments API request failed (${response.status} ${response.statusText})${detail}.${permissionHint}`);
     }
-    return (await response.json());
+    return {
+        body: (await response.json()),
+        nextUrl: parseNextLink(response.headers.get("link")),
+    };
+}
+async function requestGitHub(token, method, url, body) {
+    const page = await requestGitHubPage(token, method, url, body);
+    return page.body;
 }
 function isActionAuthoredBundleSizeComment(comment) {
     return (comment.body?.includes(comment_1.BUNDLE_SIZE_COMMENT_MARKER) === true &&
         comment.user?.login === "github-actions[bot]" &&
         comment.user.type === "Bot");
+}
+async function findExistingBundleSizeComment(token, commentsUrl) {
+    let nextUrl = commentsUrl;
+    while (nextUrl) {
+        const page = await requestGitHubPage(token, "GET", nextUrl);
+        const existingComment = page.body.find(isActionAuthoredBundleSizeComment);
+        if (existingComment) {
+            return existingComment;
+        }
+        nextUrl = page.nextUrl;
+    }
+    return undefined;
 }
 async function upsertPullRequestComment(token, body) {
     const pullRequestNumber = await getPullRequestNumberFromEvent();
@@ -471,8 +503,7 @@ async function upsertPullRequestComment(token, body) {
     }
     const { owner, repo } = getRepository();
     const apiRoot = `https://api.github.com/repos/${owner}/${repo}`;
-    const comments = await requestGitHub(token, "GET", `${apiRoot}/issues/${pullRequestNumber}/comments?per_page=100`);
-    const existingComment = comments.find(isActionAuthoredBundleSizeComment);
+    const existingComment = await findExistingBundleSizeComment(token, `${apiRoot}/issues/${pullRequestNumber}/comments?per_page=100`);
     if (existingComment) {
         await requestGitHub(token, "PATCH", `${apiRoot}/issues/comments/${existingComment.id}`, { body });
         core.info("Updated existing bundle size PR comment.");

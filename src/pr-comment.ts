@@ -22,6 +22,11 @@ interface GitHubApiErrorBody {
   message?: string;
 }
 
+interface GitHubPage<T> {
+  body: T;
+  nextUrl: string | null;
+}
+
 export async function getPullRequestNumberFromEvent(): Promise<number | null> {
   const eventPath = process.env.GITHUB_EVENT_PATH;
 
@@ -62,12 +67,29 @@ async function parseErrorMessage(response: Response): Promise<string> {
   }
 }
 
-async function requestGitHub<T>(
+function parseNextLink(linkHeader: string | null): string | null {
+  if (!linkHeader) {
+    return null;
+  }
+
+  for (const link of linkHeader.split(",")) {
+    if (!link.includes('rel="next"')) {
+      continue;
+    }
+
+    const match = /<([^>]+)>/.exec(link);
+    return match?.[1] ?? null;
+  }
+
+  return null;
+}
+
+async function requestGitHubPage<T>(
   token: string,
   method: string,
   url: string,
   body?: unknown,
-): Promise<T> {
+): Promise<GitHubPage<T>> {
   const response = await fetch(url, {
     method,
     headers: {
@@ -92,7 +114,20 @@ async function requestGitHub<T>(
     );
   }
 
-  return (await response.json()) as T;
+  return {
+    body: (await response.json()) as T,
+    nextUrl: parseNextLink(response.headers.get("link")),
+  };
+}
+
+async function requestGitHub<T>(
+  token: string,
+  method: string,
+  url: string,
+  body?: unknown,
+): Promise<T> {
+  const page = await requestGitHubPage<T>(token, method, url, body);
+  return page.body;
 }
 
 function isActionAuthoredBundleSizeComment(comment: IssueComment): boolean {
@@ -101,6 +136,32 @@ function isActionAuthoredBundleSizeComment(comment: IssueComment): boolean {
     comment.user?.login === "github-actions[bot]" &&
     comment.user.type === "Bot"
   );
+}
+
+async function findExistingBundleSizeComment(
+  token: string,
+  commentsUrl: string,
+): Promise<IssueComment | undefined> {
+  let nextUrl: string | null = commentsUrl;
+
+  while (nextUrl) {
+    const page: GitHubPage<IssueComment[]> = await requestGitHubPage<
+      IssueComment[]
+    >(
+      token,
+      "GET",
+      nextUrl,
+    );
+    const existingComment = page.body.find(isActionAuthoredBundleSizeComment);
+
+    if (existingComment) {
+      return existingComment;
+    }
+
+    nextUrl = page.nextUrl;
+  }
+
+  return undefined;
 }
 
 export async function upsertPullRequestComment(
@@ -116,12 +177,10 @@ export async function upsertPullRequestComment(
 
   const { owner, repo } = getRepository();
   const apiRoot = `https://api.github.com/repos/${owner}/${repo}`;
-  const comments = await requestGitHub<IssueComment[]>(
+  const existingComment = await findExistingBundleSizeComment(
     token,
-    "GET",
     `${apiRoot}/issues/${pullRequestNumber}/comments?per_page=100`,
   );
-  const existingComment = comments.find(isActionAuthoredBundleSizeComment);
 
   if (existingComment) {
     await requestGitHub<IssueComment>(
