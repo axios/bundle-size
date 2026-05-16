@@ -26,6 +26,8 @@ export interface ActionConfig {
   tarballUri: string;
   filePaths: string[];
   outputFile: string;
+  commentPr: boolean;
+  githubToken: string;
 }
 
 export interface TarEntry {

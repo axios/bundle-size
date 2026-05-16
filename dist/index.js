@@ -42,8 +42,10 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = run;
 const core = __importStar(__nccwpck_require__(6966));
+const comment_1 = __nccwpck_require__(1434);
 const comparison_1 = __nccwpck_require__(7614);
 const config_1 = __nccwpck_require__(5101);
+const pr_comment_1 = __nccwpck_require__(3177);
 const report_1 = __nccwpck_require__(3905);
 const tarball_1 = __nccwpck_require__(2489);
 async function run() {
@@ -62,12 +64,90 @@ async function run() {
         core.setOutput("total-current-gzip-size", String(report.totals.currentBytes));
         core.setOutput("total-baseline-gzip-size", String(report.totals.baselineBytes));
         core.setOutput("total-delta-gzip-size", String(report.totals.deltaBytes));
+        if (config.commentPr) {
+            await (0, pr_comment_1.upsertPullRequestComment)(config.githubToken, (0, comment_1.renderBundleSizeComment)(report));
+        }
     }
     catch (error) {
         core.setFailed(error instanceof Error ? error.message : String(error));
     }
 }
 //# sourceMappingURL=action.js.map
+
+/***/ }),
+
+/***/ 1434:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.BUNDLE_SIZE_COMMENT_MARKER = void 0;
+exports.statusEmoji = statusEmoji;
+exports.renderBundleSizeComment = renderBundleSizeComment;
+exports.BUNDLE_SIZE_COMMENT_MARKER = "<!-- axios-bundle-size-comment -->";
+function formatBytes(bytes) {
+    const sign = bytes < 0 ? "-" : "";
+    const absoluteBytes = Math.abs(bytes);
+    if (absoluteBytes < 1024) {
+        return `${sign}${absoluteBytes} B`;
+    }
+    return `${sign}${(absoluteBytes / 1024).toFixed(1)} KiB`;
+}
+function formatDelta(deltaBytes, deltaPercent) {
+    const formattedBytes = formatBytes(deltaBytes);
+    if (deltaPercent === null) {
+        return formattedBytes;
+    }
+    const sign = deltaPercent > 0 ? "+" : "";
+    return `${formattedBytes} (${sign}${deltaPercent.toFixed(2)}%)`;
+}
+function escapeMarkdownTableCell(value) {
+    return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
+}
+function renderMarkdownCodeSpan(value) {
+    const escapedValue = escapeMarkdownTableCell(value);
+    const backtickRuns = escapedValue.match(/`+/g) ?? [];
+    const delimiterLength = Math.max(0, ...backtickRuns.map((run) => run.length)) + 1;
+    const delimiter = "`".repeat(delimiterLength);
+    const padding = escapedValue.startsWith("`") || escapedValue.endsWith("`") ? " " : "";
+    return `${delimiter}${padding}${escapedValue}${padding}${delimiter}`;
+}
+function statusEmoji(deltaPercent) {
+    if (deltaPercent === null) {
+        return "⚪";
+    }
+    if (deltaPercent <= 1) {
+        return "🟢";
+    }
+    if (deltaPercent <= 3) {
+        return "🔵";
+    }
+    if (deltaPercent <= 6) {
+        return "🟡";
+    }
+    if (deltaPercent <= 9) {
+        return "🟠";
+    }
+    return "🔴";
+}
+function renderFileRow(file) {
+    return `| ${renderMarkdownCodeSpan(file.path)} | ${formatBytes(file.baselineBytes)} | ${formatBytes(file.currentBytes)} | ${formatDelta(file.deltaBytes, file.deltaPercent)} | ${statusEmoji(file.deltaPercent)} |`;
+}
+function renderBundleSizeComment(report) {
+    const rows = report.files.map(renderFileRow);
+    rows.push(`| **Total** | **${formatBytes(report.totals.baselineBytes)}** | **${formatBytes(report.totals.currentBytes)}** | **${formatDelta(report.totals.deltaBytes, report.totals.deltaPercent)}** | **${statusEmoji(report.totals.deltaPercent)}** |`);
+    return [
+        exports.BUNDLE_SIZE_COMMENT_MARKER,
+        "",
+        "## Bundle Size Report",
+        "",
+        "| File | Baseline gzip | Current gzip | Difference | Status |",
+        "|---|---:|---:|---:|:---:|",
+        ...rows,
+    ].join("\n");
+}
+//# sourceMappingURL=comment.js.map
 
 /***/ }),
 
@@ -214,11 +294,18 @@ function getConfig() {
         .join("\n");
     const outputFile = (0, paths_1.normalizeConfiguredPath)(core.getInput("output-file", { required: false }) ||
         "bundle-size-comparison.json");
+    const commentPr = core.getBooleanInput("comment-pr", { required: false });
+    const githubToken = core.getInput("github-token", { required: false });
+    if (commentPr && !githubToken) {
+        throw new Error("The github-token input is required when comment-pr is enabled.");
+    }
     return {
         localRoot,
         tarballUri,
         filePaths: (0, paths_1.parseFilePaths)(filesInput),
         outputFile,
+        commentPr,
+        githubToken,
     };
 }
 //# sourceMappingURL=config.js.map
@@ -279,6 +366,177 @@ function resolveInsideRoot(root, relativePath) {
     return resolvedPath;
 }
 //# sourceMappingURL=paths.js.map
+
+/***/ }),
+
+/***/ 3177:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getPullRequestNumberFromEvent = getPullRequestNumberFromEvent;
+exports.upsertPullRequestComment = upsertPullRequestComment;
+const core = __importStar(__nccwpck_require__(6966));
+const promises_1 = __nccwpck_require__(1455);
+const comment_1 = __nccwpck_require__(1434);
+class GitHubApiError extends Error {
+    status;
+    constructor(message, status) {
+        super(message);
+        this.name = "GitHubApiError";
+        this.status = status;
+    }
+}
+async function getPullRequestNumberFromEvent() {
+    const eventPath = process.env.GITHUB_EVENT_PATH;
+    if (!eventPath) {
+        return null;
+    }
+    const payload = JSON.parse(await (0, promises_1.readFile)(eventPath, "utf8"));
+    const pullRequestNumber = payload.pull_request?.number ?? payload.number;
+    return typeof pullRequestNumber === "number" ? pullRequestNumber : null;
+}
+function getRepository() {
+    const repository = process.env.GITHUB_REPOSITORY;
+    if (!repository) {
+        throw new Error("GITHUB_REPOSITORY is required to post a pull request comment.");
+    }
+    const [owner, repo] = repository.split("/");
+    if (!owner || !repo) {
+        throw new Error(`Invalid GITHUB_REPOSITORY value: ${repository}`);
+    }
+    return { owner, repo };
+}
+async function parseErrorMessage(response) {
+    try {
+        const body = (await response.json());
+        return body.message ? `: ${body.message}` : "";
+    }
+    catch {
+        return "";
+    }
+}
+function parseNextLink(linkHeader) {
+    if (!linkHeader) {
+        return null;
+    }
+    for (const link of linkHeader.split(",")) {
+        if (!link.includes('rel="next"')) {
+            continue;
+        }
+        const match = /<([^>]+)>/.exec(link);
+        return match?.[1] ?? null;
+    }
+    return null;
+}
+async function requestGitHubPage(token, method, url, body) {
+    const response = await fetch(url, {
+        method,
+        headers: {
+            accept: "application/vnd.github+json",
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+            "user-agent": "axios-bundle-size-action",
+            "x-github-api-version": "2022-11-28",
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!response.ok) {
+        const detail = await parseErrorMessage(response);
+        const permissionHint = response.status === 401 || response.status === 403
+            ? " Check that github-token has permission to write pull request or issue comments."
+            : "";
+        throw new GitHubApiError(`GitHub comments API request failed (${response.status} ${response.statusText})${detail}.${permissionHint}`, response.status);
+    }
+    return {
+        body: (await response.json()),
+        nextUrl: parseNextLink(response.headers.get("link")),
+    };
+}
+async function requestGitHub(token, method, url, body) {
+    const page = await requestGitHubPage(token, method, url, body);
+    return page.body;
+}
+function isBundleSizeComment(comment) {
+    return comment.body?.includes(comment_1.BUNDLE_SIZE_COMMENT_MARKER) === true;
+}
+async function findExistingBundleSizeComment(token, commentsUrl) {
+    let nextUrl = commentsUrl;
+    while (nextUrl) {
+        const page = await requestGitHubPage(token, "GET", nextUrl);
+        const existingComment = page.body.find(isBundleSizeComment);
+        if (existingComment) {
+            return existingComment;
+        }
+        nextUrl = page.nextUrl;
+    }
+    return undefined;
+}
+async function upsertPullRequestComment(token, body) {
+    const pullRequestNumber = await getPullRequestNumberFromEvent();
+    if (pullRequestNumber === null) {
+        core.info("Skipping bundle size PR comment because this run is not for a pull request.");
+        return;
+    }
+    const { owner, repo } = getRepository();
+    const apiRoot = `https://api.github.com/repos/${owner}/${repo}`;
+    try {
+        const existingComment = await findExistingBundleSizeComment(token, `${apiRoot}/issues/${pullRequestNumber}/comments?per_page=100`);
+        if (existingComment) {
+            await requestGitHub(token, "PATCH", `${apiRoot}/issues/comments/${existingComment.id}`, { body });
+            core.info("Updated existing bundle size PR comment.");
+            return;
+        }
+        await requestGitHub(token, "POST", `${apiRoot}/issues/${pullRequestNumber}/comments`, { body });
+        core.info("Created bundle size PR comment.");
+    }
+    catch (error) {
+        // Fork pull requests receive a read-only GITHUB_TOKEN regardless of
+        // the workflow's requested permissions. Surface that as a warning so
+        // the comparison report and outputs still succeed.
+        if (error instanceof GitHubApiError &&
+            (error.status === 401 || error.status === 403)) {
+            core.warning(`Skipping bundle size PR comment: ${error.message}`);
+            return;
+        }
+        throw error;
+    }
+}
+//# sourceMappingURL=pr-comment.js.map
 
 /***/ }),
 
@@ -28015,14 +28273,20 @@ var __webpack_exports__ = {};
 var exports = __webpack_exports__;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.extractTarGzEntries = exports.createTarballFileMap = exports.parseFilePaths = exports.buildComparisonReport = exports.run = void 0;
+exports.extractTarGzEntries = exports.createTarballFileMap = exports.upsertPullRequestComment = exports.getPullRequestNumberFromEvent = exports.parseFilePaths = exports.statusEmoji = exports.renderBundleSizeComment = exports.buildComparisonReport = exports.run = void 0;
 const action_1 = __nccwpck_require__(2737);
 var action_2 = __nccwpck_require__(2737);
 Object.defineProperty(exports, "run", ({ enumerable: true, get: function () { return action_2.run; } }));
 var comparison_1 = __nccwpck_require__(7614);
 Object.defineProperty(exports, "buildComparisonReport", ({ enumerable: true, get: function () { return comparison_1.buildComparisonReport; } }));
+var comment_1 = __nccwpck_require__(1434);
+Object.defineProperty(exports, "renderBundleSizeComment", ({ enumerable: true, get: function () { return comment_1.renderBundleSizeComment; } }));
+Object.defineProperty(exports, "statusEmoji", ({ enumerable: true, get: function () { return comment_1.statusEmoji; } }));
 var paths_1 = __nccwpck_require__(9847);
 Object.defineProperty(exports, "parseFilePaths", ({ enumerable: true, get: function () { return paths_1.parseFilePaths; } }));
+var pr_comment_1 = __nccwpck_require__(3177);
+Object.defineProperty(exports, "getPullRequestNumberFromEvent", ({ enumerable: true, get: function () { return pr_comment_1.getPullRequestNumberFromEvent; } }));
+Object.defineProperty(exports, "upsertPullRequestComment", ({ enumerable: true, get: function () { return pr_comment_1.upsertPullRequestComment; } }));
 var tarball_1 = __nccwpck_require__(2489);
 Object.defineProperty(exports, "createTarballFileMap", ({ enumerable: true, get: function () { return tarball_1.createTarballFileMap; } }));
 Object.defineProperty(exports, "extractTarGzEntries", ({ enumerable: true, get: function () { return tarball_1.extractTarGzEntries; } }));

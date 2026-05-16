@@ -21,6 +21,13 @@ inputs:
     description: 'Path, relative to the local project root, where the JSON comparison report will be written.'
     required: false
     default: 'bundle-size-comparison.json'
+  comment-pr:
+    description: 'Post or update a bundle size summary comment on pull requests.'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'GitHub token used to post pull request comments when comment-pr is enabled.'
+    required: false
 
 outputs:
   size:

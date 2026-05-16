@@ -1,6 +1,8 @@
 import * as core from "@actions/core";
+import { renderBundleSizeComment } from "./comment";
 import { buildComparisonReport } from "./comparison";
 import { getConfig } from "./config";
+import { upsertPullRequestComment } from "./pr-comment";
 import { writeComparisonReport } from "./report";
 import {
   createTarballFileMap,
@@ -44,6 +46,13 @@ export async function run(): Promise<void> {
       String(report.totals.baselineBytes),
     );
     core.setOutput("total-delta-gzip-size", String(report.totals.deltaBytes));
+
+    if (config.commentPr) {
+      await upsertPullRequestComment(
+        config.githubToken,
+        renderBundleSizeComment(report),
+      );
+    }
   } catch (error) {
     core.setFailed(error instanceof Error ? error.message : String(error));
   }
