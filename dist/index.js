@@ -105,6 +105,14 @@ function formatDelta(deltaBytes, deltaPercent) {
 function escapeMarkdownTableCell(value) {
     return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
+function renderMarkdownCodeSpan(value) {
+    const escapedValue = escapeMarkdownTableCell(value);
+    const backtickRuns = escapedValue.match(/`+/g) ?? [];
+    const delimiterLength = Math.max(0, ...backtickRuns.map((run) => run.length)) + 1;
+    const delimiter = "`".repeat(delimiterLength);
+    const padding = escapedValue.startsWith("`") || escapedValue.endsWith("`") ? " " : "";
+    return `${delimiter}${padding}${escapedValue}${padding}${delimiter}`;
+}
 function statusEmoji(deltaPercent) {
     if (deltaPercent === null) {
         return "⚪";
@@ -124,7 +132,7 @@ function statusEmoji(deltaPercent) {
     return "🔴";
 }
 function renderFileRow(file) {
-    return `| \`${escapeMarkdownTableCell(file.path)}\` | ${formatBytes(file.baselineBytes)} | ${formatBytes(file.currentBytes)} | ${formatDelta(file.deltaBytes, file.deltaPercent)} | ${statusEmoji(file.deltaPercent)} |`;
+    return `| ${renderMarkdownCodeSpan(file.path)} | ${formatBytes(file.baselineBytes)} | ${formatBytes(file.currentBytes)} | ${formatDelta(file.deltaBytes, file.deltaPercent)} | ${statusEmoji(file.deltaPercent)} |`;
 }
 function renderBundleSizeComment(report) {
     const rows = report.files.map(renderFileRow);
@@ -286,10 +294,7 @@ function getConfig() {
         .join("\n");
     const outputFile = (0, paths_1.normalizeConfiguredPath)(core.getInput("output-file", { required: false }) ||
         "bundle-size-comparison.json");
-    const commentPrInput = core.getInput("comment-pr", { required: false });
-    const commentPr = commentPrInput
-        ? core.getBooleanInput("comment-pr", { required: false })
-        : false;
+    const commentPr = core.getBooleanInput("comment-pr", { required: false });
     const githubToken = core.getInput("github-token", { required: false });
     if (commentPr && !githubToken) {
         throw new Error("The github-token input is required when comment-pr is enabled.");
@@ -478,15 +483,14 @@ async function requestGitHub(token, method, url, body) {
     const page = await requestGitHubPage(token, method, url, body);
     return page.body;
 }
-function isBotAuthoredBundleSizeComment(comment) {
-    return (comment.body?.includes(comment_1.BUNDLE_SIZE_COMMENT_MARKER) === true &&
-        comment.user?.type === "Bot");
+function isBundleSizeComment(comment) {
+    return comment.body?.includes(comment_1.BUNDLE_SIZE_COMMENT_MARKER) === true;
 }
 async function findExistingBundleSizeComment(token, commentsUrl) {
     let nextUrl = commentsUrl;
     while (nextUrl) {
         const page = await requestGitHubPage(token, "GET", nextUrl);
-        const existingComment = page.body.find(isBotAuthoredBundleSizeComment);
+        const existingComment = page.body.find(isBundleSizeComment);
         if (existingComment) {
             return existingComment;
         }

@@ -28,6 +28,16 @@ function escapeMarkdownTableCell(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
 
+function renderMarkdownCodeSpan(value: string): string {
+  const escapedValue = escapeMarkdownTableCell(value);
+  const backtickRuns = escapedValue.match(/`+/g) ?? [];
+  const delimiterLength = Math.max(0, ...backtickRuns.map((run) => run.length)) + 1;
+  const delimiter = "`".repeat(delimiterLength);
+  const padding = escapedValue.startsWith("`") || escapedValue.endsWith("`") ? " " : "";
+
+  return `${delimiter}${padding}${escapedValue}${padding}${delimiter}`;
+}
+
 export function statusEmoji(deltaPercent: number | null): string {
   if (deltaPercent === null) {
     return "⚪";
@@ -53,7 +63,7 @@ export function statusEmoji(deltaPercent: number | null): string {
 }
 
 function renderFileRow(file: ComparisonFileResult): string {
-  return `| \`${escapeMarkdownTableCell(file.path)}\` | ${formatBytes(file.baselineBytes)} | ${formatBytes(file.currentBytes)} | ${formatDelta(file.deltaBytes, file.deltaPercent)} | ${statusEmoji(file.deltaPercent)} |`;
+  return `| ${renderMarkdownCodeSpan(file.path)} | ${formatBytes(file.baselineBytes)} | ${formatBytes(file.currentBytes)} | ${formatDelta(file.deltaBytes, file.deltaPercent)} | ${statusEmoji(file.deltaPercent)} |`;
 }
 
 export function renderBundleSizeComment(report: ComparisonReport): string {

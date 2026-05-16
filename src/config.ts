@@ -38,10 +38,7 @@ export function getConfig(): ActionConfig {
     core.getInput("output-file", { required: false }) ||
       "bundle-size-comparison.json",
   );
-  const commentPrInput = core.getInput("comment-pr", { required: false });
-  const commentPr = commentPrInput
-    ? core.getBooleanInput("comment-pr", { required: false })
-    : false;
+  const commentPr = core.getBooleanInput("comment-pr", { required: false });
   const githubToken = core.getInput("github-token", { required: false });
 
   if (commentPr && !githubToken) {

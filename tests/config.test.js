@@ -21,6 +21,8 @@ async function withInputs(inputs, callback) {
       delete process.env[key];
     }
 
+    process.env['INPUT_COMMENT-PR'] = 'false';
+
     for (const [key, value] of Object.entries(inputs)) {
       process.env[key] = value;
     }

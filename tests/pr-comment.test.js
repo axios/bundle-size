@@ -132,7 +132,7 @@ test('upsertPullRequestComment updates marked comments from other bot tokens', a
   }
 });
 
-test('upsertPullRequestComment ignores marked comments from non-bot authors', async () => {
+test('upsertPullRequestComment updates marked comments from personal access tokens', async () => {
   const originalFetch = global.fetch;
   const requests = [];
 
@@ -144,23 +144,26 @@ test('upsertPullRequestComment ignores marked comments from non-bot authors', as
         return jsonResponse(200, [
           {
             id: 12,
-            body: `user collision\n${BUNDLE_SIZE_COMMENT_MARKER}`,
+            body: `existing PAT-authored comment\n${BUNDLE_SIZE_COMMENT_MARKER}`,
             user: { login: 'octocat', type: 'User' },
           },
         ]);
       }
 
-      assert.equal(options.method, 'POST');
-      assert.equal(url, 'https://api.github.com/repos/axios/bundle-size/issues/42/comments');
+      assert.equal(options.method, 'PATCH');
+      assert.equal(url, 'https://api.github.com/repos/axios/bundle-size/issues/comments/12');
       assert.deepEqual(JSON.parse(options.body), { body: 'new body' });
-      return jsonResponse(201, { id: 13, body: 'new body' });
+      return jsonResponse(200, { id: 12, body: 'new body' });
     };
 
     await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
       await upsertPullRequestComment('token-value', 'new body');
     });
 
-    assert.equal(requests.length, 2);
+    assert.deepEqual(
+      requests.map((request) => request.options.method),
+      ['GET', 'PATCH'],
+    );
   } finally {
     global.fetch = originalFetch;
   }

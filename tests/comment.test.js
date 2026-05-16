@@ -47,6 +47,23 @@ test('renderBundleSizeComment renders files, totals, marker, sizes, and statuses
   assert.match(markdown, /\| \*\*Total\*\* \| \*\*3\.0 KiB\*\* \| \*\*3\.0 KiB\*\* \| \*\*-8 B \(-0\.26%\)\*\* \| \*\*🟢\*\* \|/);
 });
 
+test('renderBundleSizeComment keeps special file path characters inside the table cell', () => {
+  const report = createReport();
+  report.files = [
+    {
+      path: 'dist/`asset|name`\\file.js',
+      baselineBytes: 10,
+      currentBytes: 12,
+      deltaBytes: 2,
+      deltaPercent: 20,
+    },
+  ];
+
+  const markdown = renderBundleSizeComment(report);
+
+  assert.match(markdown, /\| ``dist\/`asset\\\|name`\\\\file\.js`` \| 10 B \| 12 B \| 2 B \(\+20\.00%\) \| 🔴 \|/);
+});
+
 test('statusEmoji maps percent deltas to the fixed color scale', () => {
   assert.equal(statusEmoji(null), '⚪');
   assert.equal(statusEmoji(-5), '🟢');
