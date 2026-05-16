@@ -260,16 +260,50 @@ test('upsertPullRequestComment skips API calls outside pull request events', asy
   }
 });
 
-test('upsertPullRequestComment surfaces GitHub permission errors clearly', async () => {
+function captureStdout(callback) {
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const chunks = [];
+  process.stdout.write = (chunk, encoding, done) => {
+    chunks.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+    if (typeof done === 'function') done();
+    return true;
+  };
+  return Promise.resolve(callback())
+    .then(() => chunks.join(''))
+    .finally(() => {
+      process.stdout.write = originalWrite;
+    });
+}
+
+test('upsertPullRequestComment warns and continues when the token cannot comment (fork PR)', async () => {
   const originalFetch = global.fetch;
 
   try {
     global.fetch = async () => jsonResponse(403, { message: 'Resource not accessible by integration' });
 
+    const output = await withGithubEnvironment({ number: 42, pull_request: {} }, async () =>
+      captureStdout(async () => {
+        await upsertPullRequestComment('token-value', 'new body');
+      }),
+    );
+
+    assert.match(output, /::warning::Skipping bundle size PR comment/);
+    assert.match(output, /permission to write pull request or issue comments/);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('upsertPullRequestComment rethrows non-permission GitHub API errors', async () => {
+  const originalFetch = global.fetch;
+
+  try {
+    global.fetch = async () => jsonResponse(500, { message: 'Server error' });
+
     await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
       await assert.rejects(
         upsertPullRequestComment('token-value', 'new body'),
-        /permission to write pull request or issue comments/,
+        /GitHub comments API request failed \(500/,
       );
     });
   } finally {

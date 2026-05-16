@@ -112,7 +112,7 @@ steps:
       github-token: ${{ github.token }}
 ```
 
-When `comment-pr` is enabled outside a pull request event, the action writes the JSON report and skips commenting. Fork pull requests can receive read-only tokens depending on repository settings; in that case GitHub may reject comment creation with a permissions error.
+When `comment-pr` is enabled outside a pull request event, the action writes the JSON report and skips commenting. Fork pull requests receive a read-only `GITHUB_TOKEN` regardless of the workflow's requested permissions; in that case the action logs a warning, skips commenting, and still produces the JSON report and outputs.
 
 The comparison file is JSON:
 

@@ -27,6 +27,16 @@ interface GitHubPage<T> {
   nextUrl: string | null;
 }
 
+class GitHubApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "GitHubApiError";
+    this.status = status;
+  }
+}
+
 export async function getPullRequestNumberFromEvent(): Promise<number | null> {
   const eventPath = process.env.GITHUB_EVENT_PATH;
 
@@ -109,8 +119,9 @@ async function requestGitHubPage<T>(
         ? " Check that github-token has permission to write pull request or issue comments."
         : "";
 
-    throw new Error(
+    throw new GitHubApiError(
       `GitHub comments API request failed (${response.status} ${response.statusText})${detail}.${permissionHint}`,
+      response.status,
     );
   }
 
@@ -173,27 +184,42 @@ export async function upsertPullRequestComment(
 
   const { owner, repo } = getRepository();
   const apiRoot = `https://api.github.com/repos/${owner}/${repo}`;
-  const existingComment = await findExistingBundleSizeComment(
-    token,
-    `${apiRoot}/issues/${pullRequestNumber}/comments?per_page=100`,
-  );
 
-  if (existingComment) {
+  try {
+    const existingComment = await findExistingBundleSizeComment(
+      token,
+      `${apiRoot}/issues/${pullRequestNumber}/comments?per_page=100`,
+    );
+
+    if (existingComment) {
+      await requestGitHub<IssueComment>(
+        token,
+        "PATCH",
+        `${apiRoot}/issues/comments/${existingComment.id}`,
+        { body },
+      );
+      core.info("Updated existing bundle size PR comment.");
+      return;
+    }
+
     await requestGitHub<IssueComment>(
       token,
-      "PATCH",
-      `${apiRoot}/issues/comments/${existingComment.id}`,
+      "POST",
+      `${apiRoot}/issues/${pullRequestNumber}/comments`,
       { body },
     );
-    core.info("Updated existing bundle size PR comment.");
-    return;
+    core.info("Created bundle size PR comment.");
+  } catch (error) {
+    // Fork pull requests receive a read-only GITHUB_TOKEN regardless of
+    // the workflow's requested permissions. Surface that as a warning so
+    // the comparison report and outputs still succeed.
+    if (
+      error instanceof GitHubApiError &&
+      (error.status === 401 || error.status === 403)
+    ) {
+      core.warning(`Skipping bundle size PR comment: ${error.message}`);
+      return;
+    }
+    throw error;
   }
-
-  await requestGitHub<IssueComment>(
-    token,
-    "POST",
-    `${apiRoot}/issues/${pullRequestNumber}/comments`,
-    { body },
-  );
-  core.info("Created bundle size PR comment.");
 }
