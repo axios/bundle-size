@@ -9,6 +9,7 @@ jobs:
   zizmor:
     runs-on: ubuntu-latest
     permissions:
+    permissions:
       contents: read
       security-events: write
     steps:
