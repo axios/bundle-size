@@ -45,9 +45,13 @@ Use PNPM. The package manager is pinned in `package.json`.
 
 Always run `pnpm test` after behavior changes. Always run `pnpm run build` before finishing changes that affect runtime code, dependencies, action metadata, or generated output. Commit updated `dist/index.js` with source changes because GitHub Actions executes from `dist/index.js`.
 
+## Commit Guidance
+
+When asked to commit changes in this repository, use Conventional Commit messages and split the work into focused commits by coherent scope. Do not squash unrelated changes into one large hunk; include all changes the user asked to commit unless a file appears unrelated, unsafe, or blocked, in which case call that out before committing.
+
 ## Runtime Constraints
 
-- The action uses Node 20.
+- The action uses Node 24.
 - Runtime dependencies should stay small. Prefer Node built-ins when they are clear and maintainable.
 - Do not assume the caller has installed dependencies at action runtime.
 - Do not build the target project inside the action; workflows should build artifacts before invoking this action.

@@ -5,7 +5,7 @@ context: |
   runs from the committed dist/index.js bundle, not directly from src/.
 
   Runtime and tooling:
-  - Node 20 GitHub Action.
+  - Node 24 GitHub Action.
   - PNPM is the package manager and is pinned in package.json.
   - Source is TypeScript under src/ and compiles to lib/.
   - @vercel/ncc bundles lib/index.js into dist/index.js.
