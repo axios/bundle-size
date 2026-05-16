@@ -19,3 +19,9 @@ test('package manifest requires Node 24 and pnpm 11', async () => {
   assert.equal(packageJson.engines.pnpm, '>=11 <12');
   assert.equal(packageJson.packageManager, 'pnpm@11.1.2');
 });
+
+test('TypeScript config explicitly loads Node ambient types', async () => {
+  const tsconfig = JSON.parse(await readFile(path.join(root, 'tsconfig.json'), 'utf8'));
+
+  assert.deepEqual(tsconfig.compilerOptions.types, ['node']);
+});
