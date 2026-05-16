@@ -95,7 +95,44 @@ test('upsertPullRequestComment updates an existing marked comment', async () => 
   }
 });
 
-test('upsertPullRequestComment ignores marked comments from other authors', async () => {
+test('upsertPullRequestComment updates marked comments from other bot tokens', async () => {
+  const originalFetch = global.fetch;
+  const requests = [];
+
+  try {
+    global.fetch = async (url, options) => {
+      requests.push({ url, options });
+
+      if (options.method === 'GET') {
+        return jsonResponse(200, [
+          {
+            id: 14,
+            body: `existing app bot comment\n${BUNDLE_SIZE_COMMENT_MARKER}`,
+            user: { login: 'bundle-size-app[bot]', type: 'Bot' },
+          },
+        ]);
+      }
+
+      assert.equal(options.method, 'PATCH');
+      assert.equal(url, 'https://api.github.com/repos/axios/bundle-size/issues/comments/14');
+      assert.deepEqual(JSON.parse(options.body), { body: 'new body' });
+      return jsonResponse(200, { id: 14, body: 'new body' });
+    };
+
+    await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
+      await upsertPullRequestComment('token-value', 'new body');
+    });
+
+    assert.deepEqual(
+      requests.map((request) => request.options.method),
+      ['GET', 'PATCH'],
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('upsertPullRequestComment ignores marked comments from non-bot authors', async () => {
   const originalFetch = global.fetch;
   const requests = [];
 

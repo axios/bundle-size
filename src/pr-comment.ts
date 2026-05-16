@@ -130,11 +130,10 @@ async function requestGitHub<T>(
   return page.body;
 }
 
-function isActionAuthoredBundleSizeComment(comment: IssueComment): boolean {
+function isBotAuthoredBundleSizeComment(comment: IssueComment): boolean {
   return (
     comment.body?.includes(BUNDLE_SIZE_COMMENT_MARKER) === true &&
-    comment.user?.login === "github-actions[bot]" &&
-    comment.user.type === "Bot"
+    comment.user?.type === "Bot"
   );
 }
 
@@ -152,7 +151,7 @@ async function findExistingBundleSizeComment(
       "GET",
       nextUrl,
     );
-    const existingComment = page.body.find(isActionAuthoredBundleSizeComment);
+    const existingComment = page.body.find(isBotAuthoredBundleSizeComment);
 
     if (existingComment) {
       return existingComment;
