@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { constants, gzip } from "node:zlib";
-import { resolveInsideRoot } from "./paths";
-import type { ComparisonFileResult, ComparisonReport } from "./types";
+import { resolveInsideRoot } from "./paths.js";
+import type { ComparisonFileResult, ComparisonReport } from "./types.js";
 
 const gzipAsync = promisify(gzip);
 

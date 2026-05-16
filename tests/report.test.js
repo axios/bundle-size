@@ -1,10 +1,10 @@
-const assert = require('node:assert/strict');
-const { mkdtemp, readFile, rm } = require('node:fs/promises');
-const os = require('node:os');
-const path = require('node:path');
-const test = require('node:test');
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
 
-const { writeComparisonReport } = require('../lib/report.js');
+import { writeComparisonReport } from '../lib/report.js';
 
 function createReport() {
   return {

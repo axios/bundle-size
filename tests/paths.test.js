@@ -1,13 +1,13 @@
-const assert = require('node:assert/strict');
-const os = require('node:os');
-const path = require('node:path');
-const test = require('node:test');
+import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
 
-const {
+import {
   normalizeConfiguredPath,
   parseFilePaths,
   resolveInsideRoot,
-} = require('../lib/paths.js');
+} from '../lib/paths.js';
 
 test('normalizeConfiguredPath normalizes trimmed relative paths', () => {
   assert.equal(normalizeConfiguredPath(' ./dist\\a.js '), 'dist/a.js');

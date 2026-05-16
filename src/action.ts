@@ -1,14 +1,14 @@
 import * as core from "@actions/core";
-import { renderBundleSizeComment } from "./comment";
-import { buildComparisonReport } from "./comparison";
-import { getConfig } from "./config";
-import { upsertPullRequestComment } from "./pr-comment";
-import { writeComparisonReport } from "./report";
+import { renderBundleSizeComment } from "./comment.js";
+import { buildComparisonReport } from "./comparison.js";
+import { getConfig } from "./config.js";
+import { upsertPullRequestComment } from "./pr-comment.js";
+import { writeComparisonReport } from "./report.js";
 import {
   createTarballFileMap,
   downloadTarball,
   extractTarGzEntries,
-} from "./tarball";
+} from "./tarball.js";
 
 export async function run(): Promise<void> {
   try {

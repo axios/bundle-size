@@ -2,6 +2,7 @@
   "name": "bundle-size-action",
   "version": "0.1.0",
   "description": "A GitHub Action to check and report bundle sizes",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "pnpm run compile && pnpm run bundle",

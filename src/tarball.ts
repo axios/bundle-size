@@ -1,7 +1,7 @@
 import path from "node:path";
 import { promisify } from "node:util";
 import { gunzip } from "node:zlib";
-import type { TarEntry } from "./types";
+import type { TarEntry } from "./types.js";
 
 const gunzipAsync = promisify(gunzip);
 const TAR_BLOCK_SIZE = 512;

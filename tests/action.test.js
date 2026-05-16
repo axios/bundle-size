@@ -1,11 +1,11 @@
-const assert = require('node:assert/strict');
-const { mkdir, mkdtemp, readFile, rm, writeFile } = require('node:fs/promises');
-const os = require('node:os');
-const path = require('node:path');
-const test = require('node:test');
-const { gzipSync } = require('node:zlib');
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { gzipSync } from 'node:zlib';
 
-const { run } = require('../lib/action.js');
+import { run } from '../lib/action.js';
 
 const AXIOS_TARBALL_URL = 'https://registry.npmjs.org/axios/-/axios-1.12.2.tgz';
 
@@ -95,7 +95,7 @@ async function withActionEnvironment(env, callback) {
   const previousExitCode = process.exitCode;
 
   try {
-    delete process.exitCode;
+    process.exitCode = undefined;
 
     for (const key of keys) {
       delete process.env[key];
@@ -110,7 +110,7 @@ async function withActionEnvironment(env, callback) {
     return await callback();
   } finally {
     if (previousExitCode === undefined) {
-      delete process.exitCode;
+      process.exitCode = undefined;
     } else {
       process.exitCode = previousExitCode;
     }
