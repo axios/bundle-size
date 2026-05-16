@@ -2,6 +2,9 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    labels:
+      - commit::chore
+      - type::automated-pr
     schedule:
       interval: weekly
     cooldown:
@@ -9,6 +12,9 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
+    labels:
+      - commit::chore
+      - type::automated-pr
     schedule:
       interval: weekly
     cooldown:
