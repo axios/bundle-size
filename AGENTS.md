@@ -47,7 +47,7 @@ Always run `pnpm test` after behavior changes. Always run `pnpm run build` befor
 
 ## Runtime Constraints
 
-- The action uses Node 20.
+- The action uses Node 24.
 - Runtime dependencies should stay small. Prefer Node built-ins when they are clear and maintainable.
 - Do not assume the caller has installed dependencies at action runtime.
 - Do not build the target project inside the action; workflows should build artifacts before invoking this action.

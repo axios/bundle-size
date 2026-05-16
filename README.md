@@ -32,7 +32,7 @@ A custom GitHub Action that compares gzip bundle sizes for built artifacts again
 1. **TypeScript** source lives in `src/`.
 2. `pnpm run compile` (`tsc`) compiles `src/` → `lib/`.
 3. `pnpm run bundle` (`@vercel/ncc`) bundles `lib/index.js` and all dependencies into a single self-contained `dist/index.js`.
-4. `action.yml` points GitHub Actions at `dist/index.js` using the `node20` runner.
+4. `action.yml` points GitHub Actions at `dist/index.js` using the `node24` runner.
 5. When the workflow runs, GitHub reads `action.yml`, resolves the inputs, and executes `dist/index.js` — no separate `npm install` step is needed at runtime.
 
 ---
@@ -127,8 +127,8 @@ See [`.github/workflows/bundle-size.yml`](.github/workflows/bundle-size.yml) for
 
 ### Prerequisites
 
-- Node.js ≥ 20
-- PNPM ≥ 9 — install with `npm install -g pnpm` if not already available
+- Node.js ≥ 24
+- PNPM ≥ 11 — install with Corepack or `npm install -g pnpm` if not already available
 
 ### Commands
 
