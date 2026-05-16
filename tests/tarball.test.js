@@ -1,12 +1,12 @@
-const assert = require('node:assert/strict');
-const test = require('node:test');
-const { gzipSync } = require('node:zlib');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { gzipSync } from 'node:zlib';
 
-const {
+import {
   createTarballFileMap,
   downloadTarball,
   extractTarGzEntries,
-} = require('../lib/tarball.js');
+} from '../lib/tarball.js';
 
 function writeOctal(buffer, value, offset, length) {
   const octal = value.toString(8).padStart(length - 1, '0');

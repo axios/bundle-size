@@ -1,6 +1,6 @@
 import * as core from "@actions/core";
 import { readFile } from "node:fs/promises";
-import { BUNDLE_SIZE_COMMENT_MARKER } from "./comment";
+import { BUNDLE_SIZE_COMMENT_MARKER } from "./comment.js";
 
 interface IssueComment {
   id: number;

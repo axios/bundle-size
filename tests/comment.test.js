@@ -1,11 +1,11 @@
-const assert = require('node:assert/strict');
-const test = require('node:test');
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-const {
+import {
   BUNDLE_SIZE_COMMENT_MARKER,
   renderBundleSizeComment,
   statusEmoji,
-} = require('../lib/comment.js');
+} from '../lib/comment.js';
 
 function createReport() {
   return {

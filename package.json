@@ -2,6 +2,7 @@
   "name": "bundle-size-action",
   "version": "0.1.0",
   "description": "A GitHub Action to check and report bundle sizes",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "pnpm run compile && pnpm run bundle",
@@ -18,12 +19,12 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^1.11.1"
+    "@actions/core": "^3.0.1"
   },
   "devDependencies": {
-    "@types/node": "^25.6.2",
-    "@vercel/ncc": "^0.38.3",
-    "rimraf": "^6.0.1",
+    "@types/node": "^24.12.3",
+    "@vercel/ncc": "^0.38.4",
+    "rimraf": "^6.1.3",
     "typescript": "^6.0.3"
   },
   "engines": {

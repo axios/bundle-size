@@ -1,14 +1,14 @@
-const assert = require('node:assert/strict');
-const { mkdtemp, rm, writeFile } = require('node:fs/promises');
-const os = require('node:os');
-const path = require('node:path');
-const test = require('node:test');
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
 
-const { BUNDLE_SIZE_COMMENT_MARKER } = require('../lib/comment.js');
-const {
+import { BUNDLE_SIZE_COMMENT_MARKER } from '../lib/comment.js';
+import {
   getPullRequestNumberFromEvent,
   upsertPullRequestComment,
-} = require('../lib/pr-comment.js');
+} from '../lib/pr-comment.js';
 
 async function withGithubEnvironment(payload, callback) {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-pr-'));

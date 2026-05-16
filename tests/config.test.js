@@ -1,8 +1,8 @@
-const assert = require('node:assert/strict');
-const path = require('node:path');
-const test = require('node:test');
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import test from 'node:test';
 
-const { getConfig, validateTarballUri } = require('../lib/config.js');
+import { getConfig, validateTarballUri } from '../lib/config.js';
 
 const INPUT_KEYS = [
   'INPUT_PATH',

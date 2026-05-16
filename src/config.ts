@@ -1,7 +1,7 @@
 import * as core from "@actions/core";
 import path from "node:path";
-import { normalizeConfiguredPath, parseFilePaths } from "./paths";
-import type { ActionConfig } from "./types";
+import { normalizeConfiguredPath, parseFilePaths } from "./paths.js";
+import type { ActionConfig } from "./types.js";
 
 export function validateTarballUri(uri: string): string {
   const trimmedUri = uri.trim();
