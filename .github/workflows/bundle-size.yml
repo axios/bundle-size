@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -52,3 +53,5 @@ jobs:
           files: |
             index.js
           output-file: "bundle-size-comparison.json"
+          comment-pr: true
+          github-token: ${{ github.token }}
