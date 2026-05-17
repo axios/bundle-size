@@ -46,7 +46,7 @@ jobs:
         run: pnpm run test:ci
 
       - name: Publish test report
-        uses: dorny/test-reporter@v3
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository && hashFiles('reports/vitest-junit.xml') != '' }}
         with:
           name: Vitest Tests
