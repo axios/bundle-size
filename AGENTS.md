@@ -38,10 +38,11 @@ Prefer extending these focused modules over reintroducing a large single entrypo
 Use PNPM. The package manager is pinned in `package.json`.
 
 - `pnpm install --frozen-lockfile`: install dependencies in CI or a fresh checkout.
-- `pnpm run lint`: TypeScript type-check only.
-- `pnpm test`: compile TypeScript and run Node tests.
-- `pnpm run build`: compile and bundle the action into `dist/`.
-- `pnpm run clean`: remove compiled and bundled artifacts.
+- `pnpm run lint`: run Oxlint.
+- `pnpm run typecheck`: run `tsc --noEmit`.
+- `pnpm test`: run TypeScript tests with Vitest.
+- `pnpm run build`: bundle `src/index.ts` into `dist/index.js` with Vite.
+- `pnpm run clean`: remove generated Vite output.
 
 Always run `pnpm test` after behavior changes. Always run `pnpm run build` before finishing changes that affect runtime code, dependencies, action metadata, or generated output. Commit updated `dist/index.js` with source changes because GitHub Actions executes from `dist/index.js`.
 
@@ -76,11 +77,11 @@ The report shape should remain machine-readable JSON first. Markdown summaries, 
 
 ## Testing Guidance
 
-Tests live in `tests/` and run against compiled `lib/` files, so `pnpm test` compiles first.
+Tests live in `tests/` as TypeScript files and run with Vitest against source modules through `@/` aliases.
 
 Every code change in this repo should include corresponding tests. Treat tests as part of the change, not optional follow-up work. If a change truly cannot be tested, explicitly explain why in the implementation notes or OpenSpec tasks.
 
-Prefer module-aligned tests: source behavior in `src/<module>.ts` should be covered by `tests/<module>.test.js`, except `src/index.ts` when it remains only a bootstrap/re-export surface. Interface-only files such as `src/types.ts` are covered by TypeScript compilation unless they gain runtime behavior.
+Prefer module-aligned tests: source behavior in `src/<module>.ts` should be covered by `tests/<module>.test.ts`, except `src/index.ts` when it remains only a bootstrap/re-export surface. Interface-only files such as `src/types.ts` are covered by TypeScript compilation unless they gain runtime behavior.
 
 Cover these behaviors when changing comparison logic:
 
@@ -111,4 +112,4 @@ The current tarball gzip behavior is captured in `openspec/specs/tarball-gzip-co
 - Treat the tarball URI as an explicit baseline contract. Do not add package-manager shorthand such as `npm:axios@latest` unless a spec/proposal calls for registry resolution.
 - Build comparison files on PRs from already-built local artifacts. On GitHub pull requests, the checkout/build represents the merge result when using the default PR merge ref.
 - Avoid target-size enforcement in the current capability. Reporting and enforcing are different product behaviors and should remain separate changes.
-- Keep `dist/` synchronized with `src/`; otherwise the committed action will not match the reviewed TypeScript.
+- Keep `dist/index.js` synchronized with `src/`; otherwise the committed action will not match the reviewed TypeScript.

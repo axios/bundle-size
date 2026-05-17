@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { resolveInsideRoot } from "./paths.js";
-import type { ComparisonReport } from "./types.js";
+import { resolveInsideRoot } from "@/paths";
+import type { ComparisonReport } from "@/types";
 
 export async function writeComparisonReport(
   localRoot: string,

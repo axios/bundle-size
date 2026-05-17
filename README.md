@@ -12,28 +12,33 @@ A custom GitHub Action that compares gzip bundle sizes for built artifacts again
 ├── package.json                  # Node project manifest (PNPM)
 ├── pnpm-lock.yaml                # Lockfile (committed)
 ├── tsconfig.json                 # TypeScript configuration
+├── vite.config.ts                # Vite action bundle configuration
+├── vitest.config.ts              # Vitest test configuration
 ├── .gitignore
 ├── src/
-│   └── index.ts                  # Action entrypoint and comparison logic
+│   ├── index.ts                  # Action entrypoint and testable re-exports
+│   └── *.ts                      # Focused action modules
+├── tests/
+│   └── *.test.ts                 # TypeScript tests run with Vitest
 ├── dist/
-│   ├── index.js                  # Bundled action (committed, used at runtime)
-│   └── licenses.txt              # Third-party licence notices
+│   └── index.js                  # Vite-bundled action (committed, used at runtime)
 └── .github/
     └── workflows/
         └── bundle-size.yml       # Sample workflow that runs this action
 ```
 
-> **`lib/`** is the intermediate TypeScript compilation output. It is *not* committed (see `.gitignore`).
+There is no normal `lib/` workflow. Vite bundles the action directly from TypeScript source into the committed `dist/index.js` artifact.
 
 ---
 
 ## How It Works
 
 1. **TypeScript** source lives in `src/`.
-2. `pnpm run compile` (`tsc`) compiles `src/` → `lib/`.
-3. `pnpm run bundle` (`@vercel/ncc`) bundles `lib/index.js` and all dependencies into a single self-contained `dist/index.js`.
-4. `action.yml` points GitHub Actions at `dist/index.js` using the `node24` runner.
-5. When the workflow runs, GitHub reads `action.yml`, resolves the inputs, and executes `dist/index.js` — no separate `npm install` step is needed at runtime.
+2. `pnpm run typecheck` (`tsc --noEmit`) performs semantic TypeScript validation without writing build output.
+3. `pnpm test` runs TypeScript tests with Vitest against source modules.
+4. `pnpm run build` runs Vite, bundling `src/index.ts` and runtime dependencies into `dist/index.js`.
+5. `action.yml` points GitHub Actions at `dist/index.js` using the `node24` runner.
+6. When the workflow runs, GitHub reads `action.yml`, resolves the inputs, and executes `dist/index.js` — no separate `npm install` step is needed at runtime.
 
 ---
 
@@ -169,26 +174,23 @@ See [`.github/workflows/bundle-size.yml`](.github/workflows/bundle-size.yml) for
 # Install dependencies
 pnpm install
 
-# Type-check only (no output)
+# Lint with Oxlint
 pnpm run lint
+
+# Type-check only (no output)
+pnpm run typecheck
 
 # Run tests
 pnpm test
 
-# Compile TypeScript → lib/
-pnpm run compile
-
-# Bundle lib/ → dist/  (what GitHub Actions executes)
-pnpm run bundle
-
-# Full build (compile + bundle)
+# Bundle src/index.ts → dist/index.js with Vite
 pnpm run build
 
-# Remove compiled and bundled artefacts
+# Remove generated Vite output
 pnpm run clean
 ```
 
-> **Important:** always commit the updated `dist/` after a `pnpm run build`. GitHub Actions executes directly from `dist/index.js` — it does *not* re-compile or re-install at runtime.
+> **Important:** always commit the updated `dist/index.js` after a `pnpm run build`. GitHub Actions executes directly from `dist/index.js` with Node 24 — it does *not* re-compile or re-install at runtime. The Vite-built artifact does not require a generated `dist/licenses.txt` file.
 
 ---
 

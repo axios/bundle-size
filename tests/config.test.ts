@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import test from 'node:test';
+import { test } from 'vitest';
 
-import { getConfig, validateTarballUri } from '../lib/config.js';
+import { getConfig, validateTarballUri } from '@/config';
 
 const INPUT_KEYS = [
   'INPUT_PATH',
@@ -13,7 +13,7 @@ const INPUT_KEYS = [
   'INPUT_GITHUB-TOKEN',
 ];
 
-async function withInputs(inputs, callback) {
+async function withInputs<T>(inputs: Record<string, string>, callback: () => T): Promise<T> {
   const previous = new Map(INPUT_KEYS.map((key) => [key, process.env[key]]));
 
   try {

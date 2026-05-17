@@ -1,4 +1,4 @@
-import type { ComparisonFileResult, ComparisonReport } from "./types.js";
+import type { ComparisonFileResult, ComparisonReport } from "@/types";
 
 export const BUNDLE_SIZE_COMMENT_MARKER = "<!-- axios-bundle-size-comment -->";
 

@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 
 import {
   BUNDLE_SIZE_COMMENT_MARKER,
   renderBundleSizeComment,
   statusEmoji,
-} from '../lib/comment.js';
+} from '@/comment';
+import type { ComparisonReport } from '@/types';
 
-function createReport() {
+function createReport(): ComparisonReport {
   return {
     metric: 'gzip',
     baseline: { uri: 'https://example.com/archive.tgz' },

@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import { test } from 'vitest';
 
 import {
   normalizeConfiguredPath,
   parseFilePaths,
   resolveInsideRoot,
-} from '../lib/paths.js';
+} from '@/paths';
 
 test('normalizeConfiguredPath normalizes trimmed relative paths', () => {
   assert.equal(normalizeConfiguredPath(' ./dist\\a.js '), 'dist/a.js');

@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import { test } from 'vitest';
 
-import { writeComparisonReport } from '../lib/report.js';
+import { writeComparisonReport } from '@/report';
+import type { ComparisonReport } from '@/types';
 
-function createReport() {
+function createReport(): ComparisonReport {
   return {
     metric: 'gzip',
     baseline: { uri: 'https://example.com/archive.tgz' },
