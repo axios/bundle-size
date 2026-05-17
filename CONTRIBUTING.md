@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve `axios/bundle-size`. This repository contains a TypeScript GitHub Action that compares gzip bundle sizes against a tarball baseline.
+Thanks for helping improve `axios/bundle-size`. This repository contains a TypeScript GitHub Action that compares gzip bundle sizes against npm release baselines.
 
 Please follow the [Code of Conduct](./CODE_OF_CONDUCT.md) when participating in this project.
 
@@ -36,6 +36,7 @@ Keep `src/index.ts` thin. Prefer focused modules for behavior:
 
 - `src/action.ts`: action orchestration and outputs.
 - `src/config.ts`: action input parsing and validation.
+- `src/npm.ts`: npm registry release resolution.
 - `src/paths.ts`: path normalization and traversal protection.
 - `src/tarball.ts`: tarball download and parsing.
 - `src/comparison.ts`: gzip size calculation and report construction.
@@ -47,7 +48,7 @@ Keep `src/index.ts` thin. Prefer focused modules for behavior:
 - Keep changes small and focused.
 - Add or update tests for behavior changes.
 - Preserve the JSON report as machine-readable output.
-- Treat configured paths, tarball contents, and pull request input as untrusted.
+- Treat configured paths, npm metadata, tarball contents, and pull request input as untrusted.
 - Avoid new runtime dependencies unless there is a clear need.
 - Do not make the action build the caller's project; workflows should build artifacts before invoking this action.
 

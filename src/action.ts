@@ -2,6 +2,7 @@ import * as core from "@actions/core";
 import { renderBundleSizeComment } from "@/comment";
 import { buildComparisonReport } from "@/comparison";
 import { getConfig } from "@/config";
+import { resolveNpmReleaseBaselines } from "@/npm";
 import { upsertPullRequestComment } from "@/pr-comment";
 import { writeComparisonReport } from "@/report";
 import {
@@ -15,18 +16,29 @@ export async function run(): Promise<void> {
     const config = getConfig();
 
     core.info(`Local project root: ${config.localRoot}`);
-    core.info(`Baseline tarball URI: ${config.tarballUri}`);
+    core.info(`Npm package baseline: ${config.packageName}`);
     core.info(`Comparing ${config.filePaths.length} file(s) using gzip size.`);
 
-    const archive = await downloadTarball(config.tarballUri);
-    const baselineFiles = createTarballFileMap(
-      await extractTarGzEntries(archive),
-    );
+    const releases = await resolveNpmReleaseBaselines(config.packageName);
+    core.info(`Resolved ${releases.length} npm release baseline(s).`);
+
+    const releaseArchives = [];
+
+    for (const release of releases) {
+      core.info(`Downloading ${config.packageName}@${release.version}: ${release.uri}`);
+      const archive = await downloadTarball(release.uri);
+
+      releaseArchives.push({
+        ...release,
+        files: createTarballFileMap(await extractTarGzEntries(archive)),
+      });
+    }
+
     const report = await buildComparisonReport(
       config.localRoot,
-      config.tarballUri,
+      config.packageName,
       config.filePaths,
-      baselineFiles,
+      releaseArchives,
     );
     const outputPath = await writeComparisonReport(
       config.localRoot,

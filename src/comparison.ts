@@ -2,7 +2,13 @@ import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { constants, gzip } from "node:zlib";
 import { resolveInsideRoot } from "@/paths";
-import type { ComparisonFileResult, ComparisonReport } from "@/types";
+import type {
+  BaselineReleaseArchive,
+  ComparisonFileResult,
+  ComparisonReport,
+  ComparisonTotals,
+  ReleaseComparisonResult,
+} from "@/types";
 
 const gzipAsync = promisify(gzip);
 
@@ -29,17 +35,65 @@ function percentDelta(
 
 export async function buildComparisonReport(
   localRoot: string,
-  tarballUri: string,
+  packageName: string,
   filePaths: string[],
-  baselineFiles: Map<string, Buffer>,
+  releases: BaselineReleaseArchive[],
 ): Promise<ComparisonReport> {
+  const [latestRelease] = releases;
+
+  if (!latestRelease) {
+    throw new Error("At least one npm release baseline is required.");
+  }
+
+  const history: ReleaseComparisonResult[] = [];
+
+  for (const release of releases) {
+    history.push(
+      await buildReleaseComparison(localRoot, filePaths, release, release.latest),
+    );
+  }
+
+  const [latestComparison] = history;
+
+  if (!latestComparison.totals) {
+    throw new Error(`Latest release comparison is incomplete: ${latestRelease.version}`);
+  }
+
+  return {
+    metric: "gzip",
+    packageName,
+    baseline: {
+      version: latestRelease.version,
+      uri: latestRelease.uri,
+    },
+    localRoot,
+    files: latestComparison.files,
+    totals: latestComparison.totals,
+    history,
+  };
+}
+
+async function buildReleaseComparison(
+  localRoot: string,
+  filePaths: string[],
+  release: BaselineReleaseArchive,
+  strictMissingBaseline: boolean,
+): Promise<ReleaseComparisonResult> {
   const files: ComparisonFileResult[] = [];
+  const missingFiles: string[] = [];
 
   for (const filePath of filePaths) {
-    const baselineContent = baselineFiles.get(filePath);
+    const baselineContent = release.files.get(filePath);
 
     if (!baselineContent) {
-      throw new Error(`Baseline file not found in tarball: ${filePath}`);
+      if (strictMissingBaseline) {
+        throw new Error(
+          `Baseline file not found in latest release ${release.version}: ${filePath}`,
+        );
+      }
+
+      missingFiles.push(filePath);
+      continue;
     }
 
     const localPath = resolveInsideRoot(localRoot, filePath);
@@ -74,19 +128,22 @@ export async function buildComparisonReport(
     (total, file) => total + file.currentBytes,
     0,
   );
+  const totals: ComparisonTotals | null = missingFiles.length > 0
+    ? null
+    : {
+        baselineBytes,
+        currentBytes,
+        deltaBytes: currentBytes - baselineBytes,
+        deltaPercent: percentDelta(currentBytes, baselineBytes),
+      };
 
   return {
-    metric: "gzip",
-    baseline: {
-      uri: tarballUri,
-    },
-    localRoot,
+    version: release.version,
+    uri: release.uri,
+    latest: release.latest,
+    complete: missingFiles.length === 0,
+    missingFiles,
     files,
-    totals: {
-      baselineBytes,
-      currentBytes,
-      deltaBytes: currentBytes - baselineBytes,
-      deltaPercent: percentDelta(currentBytes, baselineBytes),
-    },
+    totals,
   };
 }

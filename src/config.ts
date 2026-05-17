@@ -3,33 +3,40 @@ import path from "node:path";
 import { normalizeConfiguredPath, parseFilePaths } from "@/paths";
 import type { ActionConfig } from "@/types";
 
-export function validateTarballUri(uri: string): string {
-  const trimmedUri = uri.trim();
+export function validateNpmPackageName(packageName: string): string {
+  const trimmedPackageName = packageName.trim();
 
-  if (!trimmedUri) {
-    throw new Error("The tarball-uri input is required.");
+  if (!trimmedPackageName) {
+    throw new Error("The package-name input is required.");
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmedUri);
-  } catch {
-    throw new Error(`Invalid tarball URI: ${uri}`);
+  if (/\s/.test(trimmedPackageName) || trimmedPackageName.includes(":")) {
+    throw new Error(`Invalid npm package name: ${packageName}`);
   }
 
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error(`Unsupported tarball URI protocol: ${parsed.protocol}`);
+  if (trimmedPackageName.startsWith("@")) {
+    const segments = trimmedPackageName.split("/");
+
+    if (segments.length !== 2 || !segments[0].slice(1) || !segments[1]) {
+      throw new Error(`Invalid npm package name: ${packageName}`);
+    }
+
+    return trimmedPackageName;
   }
 
-  return trimmedUri;
+  if (trimmedPackageName.includes("/")) {
+    throw new Error(`Invalid npm package name: ${packageName}`);
+  }
+
+  return trimmedPackageName;
 }
 
 export function getConfig(): ActionConfig {
   const localRoot = path.resolve(
     core.getInput("path", { required: false }) || ".",
   );
-  const tarballUri = validateTarballUri(
-    core.getInput("tarball-uri", { required: true }),
+  const packageName = validateNpmPackageName(
+    core.getInput("package-name", { required: true }),
   );
   const filesInput = core
     .getMultilineInput("files", { required: true })
@@ -47,7 +54,7 @@ export function getConfig(): ActionConfig {
 
   return {
     localRoot,
-    tarballUri,
+    packageName,
     filePaths: parseFilePaths(filesInput),
     outputFile,
     commentPr,

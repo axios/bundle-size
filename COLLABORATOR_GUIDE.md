@@ -57,7 +57,7 @@ For issues and discussions:
 - Keep unsupported feature requests open only when they fit the project direction.
 - Close issues that are duplicates, out of scope, or cannot be reproduced after reasonable follow-up.
 
-This action compares already-built files. If a report is wrong, first verify the configured `path`, `files`, `tarball-uri`, and `output-file` values before assuming comparison logic is faulty.
+This action compares already-built files. If a report is wrong, first verify the configured `path`, `files`, `package-name`, and `output-file` values before assuming comparison logic is faulty.
 
 ## Security Reports
 

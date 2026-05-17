@@ -15,18 +15,38 @@ test('buildComparisonReport measures gzip sizes and deltas for multiple files', 
 
     const report = await buildComparisonReport(
       localRoot,
-      'https://example.com/archive.tgz',
+      'axios',
       ['dist-a.js', 'dist-b.js'],
-      new Map([
-        ['dist-a.js', Buffer.from('baseline artifact')],
-        ['dist-b.js', Buffer.from('baseline artifact with content')],
-      ]),
+      [
+        {
+          version: '1.2.0',
+          uri: 'https://registry.npmjs.org/axios/-/axios-1.2.0.tgz',
+          latest: true,
+          files: new Map([
+            ['dist-a.js', Buffer.from('baseline artifact')],
+            ['dist-b.js', Buffer.from('baseline artifact with content')],
+          ]),
+        },
+        {
+          version: '1.1.0',
+          uri: 'https://registry.npmjs.org/axios/-/axios-1.1.0.tgz',
+          latest: false,
+          files: new Map([
+            ['dist-a.js', Buffer.from('older baseline artifact')],
+            ['dist-b.js', Buffer.from('older baseline artifact with content')],
+          ]),
+        },
+      ],
     );
 
     assert.equal(report.metric, 'gzip');
-    assert.equal(report.baseline.uri, 'https://example.com/archive.tgz');
+    assert.equal(report.packageName, 'axios');
+    assert.equal(report.baseline.version, '1.2.0');
+    assert.equal(report.baseline.uri, 'https://registry.npmjs.org/axios/-/axios-1.2.0.tgz');
     assert.equal(report.localRoot, localRoot);
     assert.deepEqual(report.files.map((file) => file.path), ['dist-a.js', 'dist-b.js']);
+    assert.deepEqual(report.history.map((release) => release.version), ['1.2.0', '1.1.0']);
+    assert.equal(report.history[1].complete, true);
 
     for (const file of report.files) {
       assert.equal(file.deltaBytes, file.currentBytes - file.baselineBytes);
@@ -59,9 +79,16 @@ test('buildComparisonReport handles empty file contents as gzip inputs', async (
 
     const report = await buildComparisonReport(
       localRoot,
-      'https://example.com/archive.tgz',
+      'axios',
       ['empty.js'],
-      new Map([['empty.js', Buffer.alloc(0)]]),
+      [
+        {
+          version: '1.0.0',
+          uri: 'https://registry.npmjs.org/axios/-/axios-1.0.0.tgz',
+          latest: true,
+          files: new Map([['empty.js', Buffer.alloc(0)]]),
+        },
+      ],
     );
 
     assert.ok(report.files[0].baselineBytes > 0);
@@ -79,8 +106,15 @@ test('buildComparisonReport fails when baseline file is missing', async () => {
     await writeFile(path.join(localRoot, 'dist-a.js'), 'current artifact');
 
     await assert.rejects(
-      buildComparisonReport(localRoot, 'https://example.com/archive.tgz', ['dist-a.js'], new Map()),
-      /Baseline file not found/,
+      buildComparisonReport(localRoot, 'axios', ['dist-a.js'], [
+        {
+          version: '1.0.0',
+          uri: 'https://registry.npmjs.org/axios/-/axios-1.0.0.tgz',
+          latest: true,
+          files: new Map(),
+        },
+      ]),
+      /Baseline file not found in latest release 1\.0\.0/,
     );
   } finally {
     await rm(localRoot, { force: true, recursive: true });
@@ -94,12 +128,58 @@ test('buildComparisonReport fails when local file is missing', async () => {
     await assert.rejects(
       buildComparisonReport(
         localRoot,
-        'https://example.com/archive.tgz',
+        'axios',
         ['dist-a.js'],
-        new Map([['dist-a.js', Buffer.from('baseline artifact')]]),
+        [
+          {
+            version: '1.0.0',
+            uri: 'https://registry.npmjs.org/axios/-/axios-1.0.0.tgz',
+            latest: true,
+            files: new Map([['dist-a.js', Buffer.from('baseline artifact')]]),
+          },
+        ],
       ),
       /Local file not found: dist-a\.js/,
     );
+  } finally {
+    await rm(localRoot, { force: true, recursive: true });
+  }
+});
+
+test('buildComparisonReport records missing previous-release files without failing', async () => {
+  const localRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-'));
+
+  try {
+    await writeFile(path.join(localRoot, 'dist-a.js'), 'current artifact');
+    await writeFile(path.join(localRoot, 'dist-b.js'), 'current artifact');
+
+    const report = await buildComparisonReport(
+      localRoot,
+      'axios',
+      ['dist-a.js', 'dist-b.js'],
+      [
+        {
+          version: '1.2.0',
+          uri: 'https://registry.npmjs.org/axios/-/axios-1.2.0.tgz',
+          latest: true,
+          files: new Map([
+            ['dist-a.js', Buffer.from('latest a')],
+            ['dist-b.js', Buffer.from('latest b')],
+          ]),
+        },
+        {
+          version: '1.1.0',
+          uri: 'https://registry.npmjs.org/axios/-/axios-1.1.0.tgz',
+          latest: false,
+          files: new Map([['dist-a.js', Buffer.from('old a')]]),
+        },
+      ],
+    );
+
+    assert.equal(report.history[1].complete, false);
+    assert.deepEqual(report.history[1].missingFiles, ['dist-b.js']);
+    assert.equal(report.history[1].totals, null);
+    assert.deepEqual(report.history[1].files.map((file) => file.path), ['dist-a.js']);
   } finally {
     await rm(localRoot, { force: true, recursive: true });
   }

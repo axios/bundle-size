@@ -10,7 +10,11 @@ import type { ComparisonReport } from '@/types';
 function createReport(): ComparisonReport {
   return {
     metric: 'gzip',
-    baseline: { uri: 'https://example.com/archive.tgz' },
+    packageName: 'axios',
+    baseline: {
+      version: '1.2.0',
+      uri: 'https://registry.npmjs.org/axios/-/axios-1.2.0.tgz',
+    },
     localRoot: '/tmp/project',
     files: [
       {
@@ -27,6 +31,39 @@ function createReport(): ComparisonReport {
       deltaBytes: 2,
       deltaPercent: 20,
     },
+    history: [
+      {
+        version: '1.2.0',
+        uri: 'https://registry.npmjs.org/axios/-/axios-1.2.0.tgz',
+        latest: true,
+        complete: true,
+        missingFiles: [],
+        files: [
+          {
+            path: 'dist/a.js',
+            baselineBytes: 10,
+            currentBytes: 12,
+            deltaBytes: 2,
+            deltaPercent: 20,
+          },
+        ],
+        totals: {
+          baselineBytes: 10,
+          currentBytes: 12,
+          deltaBytes: 2,
+          deltaPercent: 20,
+        },
+      },
+      {
+        version: '1.1.0',
+        uri: 'https://registry.npmjs.org/axios/-/axios-1.1.0.tgz',
+        latest: false,
+        complete: false,
+        missingFiles: ['dist/a.js'],
+        files: [],
+        totals: null,
+      },
+    ],
   };
 }
 
@@ -39,6 +76,12 @@ test('writeComparisonReport writes pretty JSON with trailing newline', async () 
 
     assert.equal(outputPath, path.join(localRoot, 'reports/comparison.json'));
     assert.equal(await readFile(outputPath, 'utf8'), `${JSON.stringify(report, null, 2)}\n`);
+
+    const writtenReport = JSON.parse(await readFile(outputPath, 'utf8')) as ComparisonReport;
+    assert.equal(writtenReport.packageName, 'axios');
+    assert.equal(writtenReport.baseline.version, '1.2.0');
+    assert.equal(writtenReport.history[1].complete, false);
+    assert.deepEqual(writtenReport.history[1].missingFiles, ['dist/a.js']);
   } finally {
     await rm(localRoot, { force: true, recursive: true });
   }
