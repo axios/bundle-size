@@ -1,13 +1,20 @@
+import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { run } from "./action.js";
+import { run } from "@/action";
 
-export { run } from "./action.js";
-export { buildComparisonReport } from "./comparison.js";
-export { renderBundleSizeComment, statusEmoji } from "./comment.js";
-export { parseFilePaths } from "./paths.js";
-export { getPullRequestNumberFromEvent, upsertPullRequestComment } from "./pr-comment.js";
-export { createTarballFileMap, extractTarGzEntries } from "./tarball.js";
+export { run } from "@/action";
+export { buildComparisonReport } from "@/comparison";
+export { renderBundleSizeComment, statusEmoji } from "@/comment";
+export { parseFilePaths } from "@/paths";
+export { getPullRequestNumberFromEvent, upsertPullRequestComment } from "@/pr-comment";
+export { createTarballFileMap, extractTarGzEntries } from "@/tarball";
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+const entrypoint = process.argv[1];
+
+if (
+  entrypoint &&
+  (import.meta.url === pathToFileURL(entrypoint).href ||
+    path.normalize(entrypoint).endsWith(path.join("dist", "index.js")))
+) {
   void run();
 }

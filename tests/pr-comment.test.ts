@@ -2,15 +2,30 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import { test } from 'vitest';
 
-import { BUNDLE_SIZE_COMMENT_MARKER } from '../lib/comment.js';
+import { BUNDLE_SIZE_COMMENT_MARKER } from '@/comment';
 import {
   getPullRequestNumberFromEvent,
   upsertPullRequestComment,
-} from '../lib/pr-comment.js';
+} from '@/pr-comment';
 
-async function withGithubEnvironment(payload, callback) {
+interface JsonResponseOptions {
+  status: number;
+  body: unknown;
+  headers?: Record<string, string>;
+  statusText?: string;
+}
+
+interface CapturedRequest {
+  url: string | URL | Request;
+  options: RequestInit;
+}
+
+async function withGithubEnvironment<T>(
+  payload: unknown,
+  callback: () => Promise<T>,
+): Promise<T> {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-pr-'));
   const eventPath = path.join(tempRoot, 'event.json');
   const keys = ['GITHUB_EVENT_PATH', 'GITHUB_REPOSITORY'];
@@ -35,16 +50,17 @@ async function withGithubEnvironment(payload, callback) {
   }
 }
 
-function jsonResponse(status, body, headers = {}) {
-  return {
-    ok: status >= 200 && status < 300,
+function jsonResponse({
+  status,
+  body,
+  headers = {},
+  statusText = status === 403 ? 'Forbidden' : 'OK',
+}: JsonResponseOptions): Response {
+  return new Response(JSON.stringify(body), {
     status,
-    statusText: status === 403 ? 'Forbidden' : 'OK',
-    headers: {
-      get: (name) => headers[name.toLowerCase()] ?? null,
-    },
-    json: async () => body,
-  };
+    statusText,
+    headers,
+  });
 }
 
 test('getPullRequestNumberFromEvent reads pull request event payloads', async () => {
@@ -61,26 +77,29 @@ test('getPullRequestNumberFromEvent returns null without a pull request number',
 
 test('upsertPullRequestComment updates an existing marked comment', async () => {
   const originalFetch = global.fetch;
-  const requests = [];
+  const requests: CapturedRequest[] = [];
 
   try {
-    global.fetch = async (url, options) => {
+    global.fetch = async (url, options = {}) => {
       requests.push({ url, options });
 
       if (options.method === 'GET') {
-        return jsonResponse(200, [
-          {
-            id: 12,
-            body: `existing\n${BUNDLE_SIZE_COMMENT_MARKER}`,
-            user: { login: 'github-actions[bot]', type: 'Bot' },
-          },
-        ]);
+        return jsonResponse({
+          status: 200,
+          body: [
+            {
+              id: 12,
+              body: `existing\n${BUNDLE_SIZE_COMMENT_MARKER}`,
+              user: { login: 'github-actions[bot]', type: 'Bot' },
+            },
+          ],
+        });
       }
 
       assert.equal(options.method, 'PATCH');
       assert.equal(url, 'https://api.github.com/repos/axios/bundle-size/issues/comments/12');
-      assert.deepEqual(JSON.parse(options.body), { body: 'new body' });
-      return jsonResponse(200, { id: 12, body: 'new body' });
+      assert.deepEqual(JSON.parse(String(options.body)), { body: 'new body' });
+      return jsonResponse({ status: 200, body: { id: 12, body: 'new body' } });
     };
 
     await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
@@ -88,8 +107,13 @@ test('upsertPullRequestComment updates an existing marked comment', async () => 
     });
 
     assert.equal(requests.length, 2);
-    assert.equal(requests[0].url, 'https://api.github.com/repos/axios/bundle-size/issues/42/comments?per_page=100');
-    assert.equal(requests[0].options.headers.authorization, 'Bearer token-value');
+    const [firstRequest] = requests;
+    assert.ok(firstRequest);
+    assert.equal(firstRequest.url, 'https://api.github.com/repos/axios/bundle-size/issues/42/comments?per_page=100');
+    assert.equal(
+      (firstRequest.options.headers as Record<string, string>).authorization,
+      'Bearer token-value',
+    );
   } finally {
     global.fetch = originalFetch;
   }
@@ -97,26 +121,29 @@ test('upsertPullRequestComment updates an existing marked comment', async () => 
 
 test('upsertPullRequestComment updates marked comments from other bot tokens', async () => {
   const originalFetch = global.fetch;
-  const requests = [];
+  const requests: CapturedRequest[] = [];
 
   try {
-    global.fetch = async (url, options) => {
+    global.fetch = async (url, options = {}) => {
       requests.push({ url, options });
 
       if (options.method === 'GET') {
-        return jsonResponse(200, [
-          {
-            id: 14,
-            body: `existing app bot comment\n${BUNDLE_SIZE_COMMENT_MARKER}`,
-            user: { login: 'bundle-size-app[bot]', type: 'Bot' },
-          },
-        ]);
+        return jsonResponse({
+          status: 200,
+          body: [
+            {
+              id: 14,
+              body: `existing app bot comment\n${BUNDLE_SIZE_COMMENT_MARKER}`,
+              user: { login: 'bundle-size-app[bot]', type: 'Bot' },
+            },
+          ],
+        });
       }
 
       assert.equal(options.method, 'PATCH');
       assert.equal(url, 'https://api.github.com/repos/axios/bundle-size/issues/comments/14');
-      assert.deepEqual(JSON.parse(options.body), { body: 'new body' });
-      return jsonResponse(200, { id: 14, body: 'new body' });
+      assert.deepEqual(JSON.parse(String(options.body)), { body: 'new body' });
+      return jsonResponse({ status: 200, body: { id: 14, body: 'new body' } });
     };
 
     await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
@@ -134,26 +161,29 @@ test('upsertPullRequestComment updates marked comments from other bot tokens', a
 
 test('upsertPullRequestComment updates marked comments from personal access tokens', async () => {
   const originalFetch = global.fetch;
-  const requests = [];
+  const requests: CapturedRequest[] = [];
 
   try {
-    global.fetch = async (url, options) => {
+    global.fetch = async (url, options = {}) => {
       requests.push({ url, options });
 
       if (options.method === 'GET') {
-        return jsonResponse(200, [
-          {
-            id: 12,
-            body: `existing PAT-authored comment\n${BUNDLE_SIZE_COMMENT_MARKER}`,
-            user: { login: 'octocat', type: 'User' },
-          },
-        ]);
+        return jsonResponse({
+          status: 200,
+          body: [
+            {
+              id: 12,
+              body: `existing PAT-authored comment\n${BUNDLE_SIZE_COMMENT_MARKER}`,
+              user: { login: 'octocat', type: 'User' },
+            },
+          ],
+        });
       }
 
       assert.equal(options.method, 'PATCH');
       assert.equal(url, 'https://api.github.com/repos/axios/bundle-size/issues/comments/12');
-      assert.deepEqual(JSON.parse(options.body), { body: 'new body' });
-      return jsonResponse(200, { id: 12, body: 'new body' });
+      assert.deepEqual(JSON.parse(String(options.body)), { body: 'new body' });
+      return jsonResponse({ status: 200, body: { id: 12, body: 'new body' } });
     };
 
     await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
@@ -171,36 +201,39 @@ test('upsertPullRequestComment updates marked comments from personal access toke
 
 test('upsertPullRequestComment searches paginated comments before creating', async () => {
   const originalFetch = global.fetch;
-  const requests = [];
+  const requests: CapturedRequest[] = [];
   const nextUrl = 'https://api.github.com/repos/axios/bundle-size/issues/42/comments?per_page=100&page=2';
 
   try {
-    global.fetch = async (url, options) => {
+    global.fetch = async (url, options = {}) => {
       requests.push({ url, options });
 
       if (options.method === 'GET' && !String(url).includes('page=2')) {
-        return jsonResponse(
-          200,
-          [{ id: 1, body: 'first page comment' }],
-          { link: `<${nextUrl}>; rel="next"` },
-        );
+        return jsonResponse({
+          status: 200,
+          body: [{ id: 1, body: 'first page comment' }],
+          headers: { link: `<${nextUrl}>; rel="next"` },
+        });
       }
 
       if (options.method === 'GET') {
         assert.equal(url, nextUrl);
-        return jsonResponse(200, [
-          {
-            id: 99,
-            body: `second page\n${BUNDLE_SIZE_COMMENT_MARKER}`,
-            user: { login: 'github-actions[bot]', type: 'Bot' },
-          },
-        ]);
+        return jsonResponse({
+          status: 200,
+          body: [
+            {
+              id: 99,
+              body: `second page\n${BUNDLE_SIZE_COMMENT_MARKER}`,
+              user: { login: 'github-actions[bot]', type: 'Bot' },
+            },
+          ],
+        });
       }
 
       assert.equal(options.method, 'PATCH');
       assert.equal(url, 'https://api.github.com/repos/axios/bundle-size/issues/comments/99');
-      assert.deepEqual(JSON.parse(options.body), { body: 'new body' });
-      return jsonResponse(200, { id: 99, body: 'new body' });
+      assert.deepEqual(JSON.parse(String(options.body)), { body: 'new body' });
+      return jsonResponse({ status: 200, body: { id: 99, body: 'new body' } });
     };
 
     await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
@@ -218,20 +251,20 @@ test('upsertPullRequestComment searches paginated comments before creating', asy
 
 test('upsertPullRequestComment creates a comment when no marked comment exists', async () => {
   const originalFetch = global.fetch;
-  const requests = [];
+  const requests: CapturedRequest[] = [];
 
   try {
-    global.fetch = async (url, options) => {
+    global.fetch = async (url, options = {}) => {
       requests.push({ url, options });
 
       if (options.method === 'GET') {
-        return jsonResponse(200, [{ id: 1, body: 'different comment' }]);
+        return jsonResponse({ status: 200, body: [{ id: 1, body: 'different comment' }] });
       }
 
       assert.equal(options.method, 'POST');
       assert.equal(url, 'https://api.github.com/repos/axios/bundle-size/issues/42/comments');
-      assert.deepEqual(JSON.parse(options.body), { body: 'new body' });
-      return jsonResponse(201, { id: 13, body: 'new body' });
+      assert.deepEqual(JSON.parse(String(options.body)), { body: 'new body' });
+      return jsonResponse({ status: 201, body: { id: 13, body: 'new body' }, statusText: 'Created' });
     };
 
     await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
@@ -260,14 +293,19 @@ test('upsertPullRequestComment skips API calls outside pull request events', asy
   }
 });
 
-function captureStdout(callback) {
+function captureStdout(callback: () => Promise<void>): Promise<string> {
   const originalWrite = process.stdout.write.bind(process.stdout);
-  const chunks = [];
-  process.stdout.write = (chunk, encoding, done) => {
-    chunks.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+  const chunks: string[] = [];
+  process.stdout.write = ((
+    chunk: string | Uint8Array,
+    encoding?: BufferEncoding | ((error?: Error | null) => void),
+    done?: (error?: Error | null) => void,
+  ) => {
+    chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+    if (typeof encoding === 'function') encoding();
     if (typeof done === 'function') done();
     return true;
-  };
+  }) as typeof process.stdout.write;
   return Promise.resolve(callback())
     .then(() => chunks.join(''))
     .finally(() => {
@@ -279,7 +317,7 @@ test('upsertPullRequestComment warns and continues when the token cannot comment
   const originalFetch = global.fetch;
 
   try {
-    global.fetch = async () => jsonResponse(403, { message: 'Resource not accessible by integration' });
+    global.fetch = async () => jsonResponse({ status: 403, body: { message: 'Resource not accessible by integration' } });
 
     const output = await withGithubEnvironment({ number: 42, pull_request: {} }, async () =>
       captureStdout(async () => {
@@ -298,7 +336,7 @@ test('upsertPullRequestComment rethrows non-permission GitHub API errors', async
   const originalFetch = global.fetch;
 
   try {
-    global.fetch = async () => jsonResponse(500, { message: 'Server error' });
+    global.fetch = async () => jsonResponse({ status: 500, body: { message: 'Server error' } });
 
     await withGithubEnvironment({ number: 42, pull_request: {} }, async () => {
       await assert.rejects(

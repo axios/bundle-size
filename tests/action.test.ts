@@ -2,19 +2,20 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
 import { gzipSync } from 'node:zlib';
+import { test } from 'vitest';
 
-import { run } from '../lib/action.js';
+import { run } from '@/action';
+import type { ComparisonReport } from '@/types';
 
 const AXIOS_TARBALL_URL = 'https://registry.npmjs.org/axios/-/axios-1.12.2.tgz';
 
-function writeOctal(buffer, value, offset, length) {
+function writeOctal(buffer: Buffer, value: number, offset: number, length: number): void {
   const octal = value.toString(8).padStart(length - 1, '0');
   buffer.write(`${octal}\0`, offset, length, 'ascii');
 }
 
-function createTar(entries) {
+function createTar(entries: [string, string][]): Buffer {
   const blocks = [];
 
   for (const [entryPath, contentValue] of entries) {
@@ -50,7 +51,7 @@ function createTar(entries) {
   return Buffer.concat(blocks);
 }
 
-function parseGithubOutput(content) {
+function parseGithubOutput(content: string): Map<string, string> {
   const outputs = new Map();
   const lines = content.split('\n');
 
@@ -81,7 +82,10 @@ function parseGithubOutput(content) {
   return outputs;
 }
 
-async function withActionEnvironment(env, callback) {
+async function withActionEnvironment<T>(
+  env: Record<string, string>,
+  callback: () => Promise<T>,
+): Promise<T> {
   const keys = [
     'GITHUB_OUTPUT',
     'INPUT_PATH',
@@ -129,7 +133,7 @@ test('run writes outputs and a comparison report for a mocked axios npm tarball'
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-action-'));
   const outputFile = path.join(tempRoot, 'github-output.txt');
   const originalFetch = global.fetch;
-  let exitCode;
+  let exitCode: number | string | null | undefined;
 
   try {
     await mkdir(path.join(tempRoot, 'dist'), { recursive: true });
@@ -143,10 +147,12 @@ test('run writes outputs and a comparison report for a mocked axios npm tarball'
     global.fetch = async (uri) => {
       assert.equal(uri, AXIOS_TARBALL_URL);
 
-      return {
-        ok: true,
-        arrayBuffer: async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength),
-      };
+      return new Response(
+        archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength),
+        {
+          status: 200,
+        },
+      );
     };
 
     await withActionEnvironment(
@@ -167,7 +173,7 @@ test('run writes outputs and a comparison report for a mocked axios npm tarball'
 
     const outputs = parseGithubOutput(await readFile(outputFile, 'utf8'));
     const comparisonFile = path.join(tempRoot, 'reports/comparison.json');
-    const report = JSON.parse(await readFile(comparisonFile, 'utf8'));
+    const report = JSON.parse(await readFile(comparisonFile, 'utf8')) as ComparisonReport;
 
     assert.equal(outputs.get('comparison-file'), comparisonFile);
     assert.equal(outputs.get('size'), String(report.totals.currentBytes));

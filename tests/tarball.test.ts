@@ -1,19 +1,25 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
 import { gzipSync } from 'node:zlib';
+import { test } from 'vitest';
 
 import {
   createTarballFileMap,
   downloadTarball,
   extractTarGzEntries,
-} from '../lib/tarball.js';
+} from '@/tarball';
 
-function writeOctal(buffer, value, offset, length) {
+interface TarTestEntry {
+  path: string;
+  content?: string;
+  type?: string;
+}
+
+function writeOctal(buffer: Buffer, value: number, offset: number, length: number): void {
   const octal = value.toString(8).padStart(length - 1, '0');
   buffer.write(`${octal}\0`, offset, length, 'ascii');
 }
 
-function createHeader(entryPath, size, type = '0') {
+function createHeader(entryPath: string, size: number, type = '0'): Buffer {
   const header = Buffer.alloc(512);
 
   header.write(entryPath, 0, 100, 'utf8');
@@ -35,7 +41,7 @@ function createHeader(entryPath, size, type = '0') {
   return header;
 }
 
-function createTar(entries) {
+function createTar(entries: TarTestEntry[]): Buffer {
   const blocks = [];
 
   for (const entry of entries) {
@@ -55,7 +61,7 @@ function createTar(entries) {
   return Buffer.concat(blocks);
 }
 
-function createTarWithRawSize(entryPath, rawSize) {
+function createTarWithRawSize(entryPath: string, rawSize: string): Buffer {
   const header = createHeader(entryPath, 0);
 
   header.fill(0, 124, 136);
@@ -72,10 +78,10 @@ test('downloadTarball returns response bytes', async () => {
     global.fetch = async (uri) => {
       assert.equal(uri, 'https://example.com/archive.tgz');
 
-      return {
-        ok: true,
-        arrayBuffer: async () => content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength),
-      };
+      return new Response(
+        content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength),
+        { status: 200 },
+      );
     };
 
     assert.deepEqual(await downloadTarball('https://example.com/archive.tgz'), content);
@@ -97,7 +103,7 @@ test('downloadTarball fails clearly for rejected fetches and HTTP errors', async
       /Failed to download tarball URI https:\/\/example\.com\/archive\.tgz: network down/,
     );
 
-    global.fetch = async () => ({ ok: false, status: 404, statusText: 'Not Found' });
+    global.fetch = async () => new Response('', { status: 404, statusText: 'Not Found' });
 
     await assert.rejects(
       downloadTarball('https://example.com/archive.tgz'),
@@ -155,8 +161,8 @@ test('createTarballFileMap strips only a single shared top-level directory', asy
     ]))),
   );
 
-  assert.equal(singleRootMap.get('package/dist/a.js').toString(), 'baseline-a');
-  assert.equal(singleRootMap.get('dist/a.js').toString(), 'baseline-a');
+  assert.equal(singleRootMap.get('package/dist/a.js')?.toString(), 'baseline-a');
+  assert.equal(singleRootMap.get('dist/a.js')?.toString(), 'baseline-a');
 
   const multipleRootMap = createTarballFileMap([
     { path: 'package/dist/a.js', content: Buffer.from('baseline-a') },

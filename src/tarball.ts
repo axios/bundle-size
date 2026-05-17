@@ -1,7 +1,7 @@
 import path from "node:path";
 import { promisify } from "node:util";
 import { gunzip } from "node:zlib";
-import type { TarEntry } from "./types.js";
+import type { TarEntry } from "@/types";
 
 const gunzipAsync = promisify(gunzip);
 const TAR_BLOCK_SIZE = 512;
@@ -35,7 +35,7 @@ function readTarString(block: Buffer, start: number, length: number): string {
 }
 
 function readTarSize(block: Buffer, entryPath: string): number {
-  const rawSize = readTarString(block, 124, 12).replace(/\0/g, "").trim();
+  const rawSize = readTarString(block, 124, 12).replaceAll("\0", "").trim();
 
   if (!rawSize) {
     return 0;
