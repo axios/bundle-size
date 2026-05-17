@@ -21,13 +21,13 @@ pnpm run build
 pnpm run clean
 ```
 
-`pnpm test` compiles TypeScript before running the Node test suite. `pnpm run build` compiles and bundles the action into `dist/`.
+`pnpm test` runs the TypeScript tests with Vitest against the source modules. `pnpm run build` compiles and bundles the action into `dist/`.
 
 ## Project Structure
 
 - `action.yml`: GitHub Action metadata and runtime entrypoint.
 - `src/`: TypeScript source.
-- `tests/`: Node test suite for compiled modules.
+- `tests/`: TypeScript tests that run with Vitest against source modules.
 - `dist/`: committed action bundle executed by GitHub Actions.
 - `openspec/`: requirements and change proposals.
 
@@ -72,7 +72,7 @@ Also run the build for changes that affect runtime code, dependencies, action me
 pnpm run build
 ```
 
-Prefer module-aligned tests. For example, changes in `src/tarball.ts` should usually be covered by `tests/tarball.test.js`.
+Prefer module-aligned tests. For example, changes in `src/tarball.ts` should usually be covered by `tests/tarball.test.ts`.
 
 Security-sensitive changes should include tests for relevant edge cases, especially:
 
