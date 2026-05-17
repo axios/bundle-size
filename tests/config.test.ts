@@ -49,6 +49,7 @@ test('validateNpmPackageName rejects missing and invalid package names', () => {
   assert.throws(() => validateNpmPackageName(''), /package-name input is required/);
   assert.throws(() => validateNpmPackageName('not a package'), /Invalid npm package name/);
   assert.throws(() => validateNpmPackageName('@scope'), /Invalid npm package name/);
+  assert.throws(() => validateNpmPackageName('@scope/name:latest'), /Invalid npm package name/);
   assert.throws(() => validateNpmPackageName('npm:axios@latest'), /Invalid npm package name/);
 });
 

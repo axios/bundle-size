@@ -10,7 +10,7 @@ export function validateNpmPackageName(packageName: string): string {
     throw new Error("The package-name input is required.");
   }
 
-  if (/\s/.test(trimmedPackageName)) {
+  if (/\s/.test(trimmedPackageName) || trimmedPackageName.includes(":")) {
     throw new Error(`Invalid npm package name: ${packageName}`);
   }
 
@@ -24,7 +24,7 @@ export function validateNpmPackageName(packageName: string): string {
     return trimmedPackageName;
   }
 
-  if (trimmedPackageName.includes("/") || trimmedPackageName.includes(":")) {
+  if (trimmedPackageName.includes("/")) {
     throw new Error(`Invalid npm package name: ${packageName}`);
   }
 

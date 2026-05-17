@@ -1,4 +1,4 @@
-import path from "node:path";
+import { join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import { run } from "@/action";
 
@@ -12,10 +12,18 @@ export { createTarballFileMap, extractTarGzEntries } from "@/tarball";
 
 const entrypoint = process.argv[1];
 
-if (
-  entrypoint &&
-  (import.meta.url === pathToFileURL(entrypoint).href ||
-    path.normalize(entrypoint).endsWith(path.join("dist", "index.js")))
-) {
+export function shouldRunEntrypoint(
+  entrypointPath = entrypoint,
+  environment: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return Boolean(
+    (environment.GITHUB_ACTIONS === "true" && environment.INPUT_FILES !== undefined) ||
+      (entrypointPath &&
+        (import.meta.url === pathToFileURL(entrypointPath).href ||
+          normalize(entrypointPath).endsWith(join("dist", "index.js")))),
+  );
+}
+
+if (shouldRunEntrypoint()) {
   void run();
 }
