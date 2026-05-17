@@ -72,7 +72,7 @@ Primary data flow:
 - PR comments are skipped outside pull request events.
 - Fork pull request token permission failures are downgraded to warnings so reporting still succeeds without requiring elevated token permissions.
 - Markdown table file paths are escaped before rendering in PR comments.
-- Repository workflows pin third-party GitHub Actions by commit SHA and use reduced permissions.
+- Repository workflows use reduced permissions, and most third-party GitHub Actions are pinned by commit SHA (the test reporter step is currently version-tagged).
 - Dependabot updates npm and GitHub Actions dependencies.
 - A zizmor workflow scans GitHub Actions configuration.
 
