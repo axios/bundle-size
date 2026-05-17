@@ -4,6 +4,10 @@ node_modules/
 # TypeScript intermediate output (not needed in the repo; dist/ IS needed)
 lib/
 
+# Test reporting output
+coverage/
+reports/
+
 # Miscellaneous
 *.log
 .DS_Store

@@ -13,8 +13,7 @@ const entrypoint = process.argv[1];
 
 if (
   entrypoint &&
-  (import.meta.url === pathToFileURL(entrypoint).href ||
-    path.normalize(entrypoint).endsWith(path.join("dist", "index.js")))
+  import.meta.url === pathToFileURL(entrypoint).href
 ) {
   void run();
 }

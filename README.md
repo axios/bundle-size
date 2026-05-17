@@ -183,6 +183,9 @@ pnpm run typecheck
 # Run tests
 pnpm test
 
+# Run tests with CI reporting artifacts and coverage
+pnpm run test:ci
+
 # Bundle src/index.ts → dist/index.js with Vite
 pnpm run build
 
@@ -191,6 +194,8 @@ pnpm run clean
 ```
 
 > **Important:** always commit the updated `dist/index.js` after a `pnpm run build`. GitHub Actions executes directly from `dist/index.js` with Node 24 — it does *not* re-compile or re-install at runtime. The Vite-built artifact does not require a generated `dist/licenses.txt` file.
+
+The repository pull request workflow runs `pnpm run test:ci` to generate `reports/vitest-junit.xml` for `dorny/test-reporter@v3` and `coverage/coverage-summary.json` for the GitHub Actions job summary. This reporting is only for this repository's CI visibility and is not part of the published bundle-size action API.
 
 ---
 

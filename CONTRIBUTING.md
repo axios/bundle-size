@@ -17,11 +17,12 @@ Useful commands:
 ```bash
 pnpm run lint
 pnpm test
+pnpm run test:ci
 pnpm run build
 pnpm run clean
 ```
 
-`pnpm test` runs the TypeScript tests with Vitest against the source modules. `pnpm run build` compiles and bundles the action into `dist/`.
+`pnpm test` runs the TypeScript tests with Vitest against the source modules. `pnpm run test:ci` runs the same suite with JUnit reporting artifacts and coverage output for the repository pull request workflow. `pnpm run build` compiles and bundles the action into `dist/`.
 
 ## Project Structure
 
