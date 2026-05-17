@@ -1,3 +1,7 @@
+<div align="center">
+   <a href="https://axios.rest"><img src="https://axios.rest/logo.svg" alt="Axios" /></a><br>
+</div>
+
 # Bundle Size Action
 
 A custom GitHub Action that compares gzip bundle sizes for built artifacts against matching files from npm release baselines.
