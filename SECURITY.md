@@ -57,7 +57,7 @@ Out of scope examples:
 
 ## Secure Usage
 
-- Use immutable `https:` tarball URLs for `tarball-uri` when possible.
+- Configure the intended npm `package-name` and review reports for the resolved latest release version.
 - Keep `files` and `output-file` relative to the configured `path` root.
 - Use minimal workflow permissions. JSON-only comparisons should not need write permissions.
 - Enable `comment-pr` only when PR comments are needed, and pass the default `${{ github.token }}` unless a stronger token is strictly required.

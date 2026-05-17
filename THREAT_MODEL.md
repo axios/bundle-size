@@ -2,7 +2,7 @@
 
 ## Scope
 
-This threat model covers the `axios/bundle-size` GitHub Action in this repository. The action compares gzip sizes for local build artifacts against matching files from a configured `.tar.gz` baseline, writes a JSON report, exposes GitHub Action outputs, and can optionally post or update a pull request comment.
+This threat model covers the `axios/bundle-size` GitHub Action in this repository. The action compares gzip sizes for local build artifacts against matching files from npm release tarball baselines, writes a JSON report, exposes GitHub Action outputs, and can optionally post or update a pull request comment.
 
 The runtime entrypoint is the committed `dist/index.js` bundle referenced by `action.yml`. The TypeScript source under `src/` is the reviewed source of truth, but GitHub Actions executes `dist/index.js` directly.
 
@@ -18,7 +18,7 @@ Out of scope:
 The action accepts these trust-relevant inputs:
 
 - `path`: local project root containing already-built artifacts.
-- `tarball-uri`: HTTP(S) URI for the baseline `.tar.gz` archive.
+- `package-name`: npm package whose release tarballs provide baselines.
 - `files`: newline-delimited artifact paths to compare.
 - `output-file`: report path relative to `path`.
 - `comment-pr`: whether to post or update a pull request comment.
@@ -27,13 +27,15 @@ The action accepts these trust-relevant inputs:
 Primary data flow:
 
 1. Read and validate action inputs.
-2. Download `tarball-uri` with `fetch`.
-3. Gunzip and parse regular files from the tar archive into memory.
-4. Normalize configured paths and resolve local files under `path`.
-5. Gzip local and baseline file bytes and calculate deltas.
-6. Write a JSON report under `path` at `output-file`.
-7. Set action outputs.
-8. If enabled and running for a pull request, call the GitHub comments API to update or create one comment identified by a hidden marker.
+2. Fetch npm registry metadata for `package-name` with `fetch`.
+3. Select the latest release and up to 10 previous stable releases.
+4. Download selected release tarballs with `fetch`.
+5. Gunzip and parse regular files from each tar archive into memory.
+6. Normalize configured paths and resolve local files under `path`.
+7. Gzip local and baseline file bytes and calculate deltas.
+8. Write a JSON report under `path` at `output-file`.
+9. Set action outputs.
+10. If enabled and running for a pull request, call the GitHub comments API to update or create one comment identified by a hidden marker.
 
 ## Assets
 
@@ -47,7 +49,7 @@ Primary data flow:
 ## Trust Boundaries
 
 - Workflow configuration to action inputs: repository maintainers control normal workflow inputs, but pull request changes may alter workflows in some repository setups.
-- External network to runner: `tarball-uri` downloads untrusted bytes from an external HTTP(S) endpoint.
+- External network to runner: npm metadata and release tarball downloads return untrusted bytes from the npm registry and tarball endpoints.
 - Tarball contents to parser: archive headers, paths, sizes, and file contents are attacker-controlled if the baseline source is compromised or misconfigured.
 - Workspace to action: local build artifacts may be produced from untrusted pull request code.
 - Action to GitHub API: PR commenting uses a token whose permissions are configured by the workflow and constrained by GitHub event rules.
@@ -56,18 +58,18 @@ Primary data flow:
 ## Threat Actors
 
 - Malicious pull request author who can change source code, build artifacts, or possibly workflow files depending on repository policy.
-- Attacker controlling or intercepting the baseline tarball endpoint.
+- Attacker controlling or intercepting npm metadata or baseline tarball endpoints.
 - Compromised dependency or action used in this repository's CI workflow.
-- Maintainer accidentally configuring broad token permissions, unsafe paths, or untrusted baseline URLs.
+- Maintainer accidentally configuring broad token permissions, unsafe paths, or the wrong npm package baseline.
 
 ## Security Controls In Place
 
-- `tarball-uri` accepts only `http:` and `https:` URLs; other protocols are rejected.
+- Release tarball URLs from npm metadata must use `http:` or `https:`.
 - Configured file paths reject absolute paths, Windows drive paths, UNC-like paths, empty paths, and `..` traversal.
 - Local artifact reads and JSON report writes are resolved through `resolveInsideRoot()` to keep them under `path`.
 - Tarball entries are parsed in memory as regular files only; entries are not extracted to disk, so tar path traversal and symlink entries cannot overwrite workspace files.
 - Tarball entry paths are normalized and a single shared package root such as `package/` is stripped only for lookup convenience.
-- Missing local or baseline files fail the action instead of producing a partial report.
+- Missing local or latest baseline files fail the action; missing previous-release files are marked as incomplete historical comparisons.
 - PR commenting is opt-in and requires `github-token` when enabled.
 - PR comments are skipped outside pull request events.
 - Fork pull request token permission failures are downgraded to warnings so reporting still succeeds without requiring elevated token permissions.
@@ -83,8 +85,8 @@ Primary data flow:
 | Malicious `files` or `output-file` escapes the workspace root | Read or overwrite files outside the intended project tree | Path normalization rejects absolute and traversal paths; final resolution checks containment under `path` | Continue testing path handling across POSIX, Windows-like, and backslash inputs |
 | Malicious tarball attempts path traversal or symlink overwrite | Workspace overwrite or unexpected file selection | Tar entries are never written to disk; only regular file contents are stored in memory | Continue ignoring non-regular entries; avoid future disk extraction unless using hardened extraction rules |
 | Malicious tarball causes memory or CPU exhaustion | CI job denial of service | Tar size fields are validated as safe integers and truncated entries fail | No hard byte, file count, decompressed size, or fetch timeout limit exists; consider configurable limits if the action will process untrusted baselines |
-| Malicious or compromised baseline URL changes comparison results | Misleading report or PR comment | Workflow explicitly chooses the baseline URI; failed downloads fail the action | Prefer immutable, versioned HTTPS tarball URLs; avoid mutable `latest`-style URLs for release gates |
-| HTTP baseline URI is intercepted or modified | Misleading report or denial of service | Non-HTTP(S) protocols are rejected | `http:` is currently allowed; prefer `https:` in workflows, and consider rejecting plain HTTP if compatibility allows |
+| Malicious or compromised npm metadata changes comparison results | Misleading report or PR comment | The action resolves releases from npm metadata and failed downloads fail the action | Prefer the public npm registry for public packages; consider integrity verification if future requirements need stronger supply-chain guarantees |
+| HTTP release tarball URI is intercepted or modified | Misleading report or denial of service | Non-HTTP(S) protocols are rejected | `http:` tarball URLs from metadata are currently allowed; consider rejecting plain HTTP if compatibility allows |
 | PR comment token has excessive permissions | Token misuse impact if later code is compromised | README example grants `contents: read` and `pull-requests: write`; workflows use least practical permissions | Keep `github-token` scoped to comment writing only; avoid personal access tokens unless required |
 | Malicious PR attempts to exfiltrate `github-token` through comment content | Secret disclosure in PR comment | Current rendered comment includes size data and configured file paths, not token values | Keep token out of reports, logs, errors, and rendered comments; review future comment fields for secret exposure |
 | Markdown injection through compared file paths | Misleading PR comment formatting or hidden content | Markdown table separators, backslashes, and code span backticks are escaped | Continue treating rendered file paths as untrusted text |
@@ -95,7 +97,7 @@ Primary data flow:
 
 ## Secure Usage Guidance
 
-- Use immutable `https:` baseline tarball URLs when possible.
+- Configure the intended npm `package-name` and review reports for the resolved latest release version.
 - Keep workflow permissions minimal. For JSON-only reports, `contents: read` is sufficient. For PR comments, add only the permission needed to write comments, such as `pull-requests: write` for this repository's workflow pattern.
 - Pass `${{ github.token }}` rather than a long-lived personal access token unless GitHub's default token cannot satisfy the use case.
 - Build artifacts in an explicit step before invoking this action; this action should only compare files, not run arbitrary project build logic.

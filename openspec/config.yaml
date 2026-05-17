@@ -7,14 +7,15 @@ context: |
   Runtime and tooling:
   - Node 24 GitHub Action.
   - PNPM is the package manager and is pinned in package.json.
-  - Source is TypeScript under src/ and compiles to lib/.
-  - @vercel/ncc bundles lib/index.js into dist/index.js.
+  - Source is TypeScript under src/.
+  - Vite bundles src/index.ts into dist/index.js.
   - Runtime dependencies should stay small; prefer Node built-ins when clear.
 
   Current behavior:
-  - Accepts a tarball-uri baseline archive.
+  - Accepts an npm package-name baseline.
   - Accepts newline-delimited files to compare.
   - Resolves local files under path.
+  - Resolves npm release tarballs for the latest release plus up to 10 previous stable releases.
   - Resolves tarball files relative to the archive root, stripping a single
     shared top-level directory such as package/.
   - Measures gzip-compressed byte size.
@@ -25,6 +26,7 @@ context: |
   - src/index.ts is a thin bootstrap/re-export surface.
   - src/action.ts orchestrates the action run and action outputs.
   - src/config.ts reads and validates @actions/core inputs.
+  - src/npm.ts resolves npm package metadata and release tarball baselines.
   - src/paths.ts normalizes configured paths and prevents path traversal.
   - src/tarball.ts downloads tarballs and extracts regular files from .tar.gz archives.
   - src/comparison.ts computes gzip sizes and per-file/totals deltas.
@@ -33,7 +35,8 @@ context: |
 
   Design constraints:
   - Do not build the target project inside the action; workflows build artifacts first.
-  - Treat missing configured files as errors.
+  - Treat missing configured local files and latest-release baseline files as errors.
+    Historical previous-release missing files may be reported as incomplete context.
   - Configured file paths are user-facing paths, not archive-internal paths.
   - Preserve path as the local project root; do not overload it with baseline semantics.
   - Gzip size is the current canonical metric.
@@ -42,11 +45,11 @@ context: |
   - Keep dist/index.js synchronized with src/ for runtime changes.
 
   Testing expectations:
-  - pnpm test compiles TypeScript and runs Node tests against lib/.
+  - pnpm test runs TypeScript tests with Vitest against source modules.
   - Every code change should include corresponding tests in the same change.
     If a change truly cannot be tested, the reason must be explicit in the
     implementation notes or tasks.
-  - Prefer module-aligned tests under tests/<module>.test.js for behavior in
+  - Prefer module-aligned tests under tests/<module>.test.ts for behavior in
     src/<module>.ts. src/index.ts is exempt while it remains only bootstrap and
     re-exports; src/types.ts is covered by TypeScript compilation unless it gains
     runtime behavior.

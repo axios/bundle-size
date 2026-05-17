@@ -8,9 +8,10 @@ This repo is a TypeScript GitHub Action for comparing bundle sizes. The action r
 
 Core behavior today:
 
-- Accepts a `tarball-uri` baseline archive.
+- Accepts an npm `package-name` baseline.
 - Accepts newline-delimited `files` to compare.
 - Resolves local files under `path`.
+- Resolves npm release tarballs for the latest release plus up to 10 previous stable releases.
 - Resolves tarball files relative to the archive root, stripping a single shared top-level directory such as `package/`.
 - Measures gzip-compressed byte size.
 - Writes a JSON comparison report.
@@ -24,6 +25,7 @@ Current modules:
 
 - `src/action.ts`: orchestrates the GitHub Action run and action outputs.
 - `src/config.ts`: reads and validates `@actions/core` inputs.
+- `src/npm.ts`: resolves npm package metadata and release tarball baselines.
 - `src/paths.ts`: normalizes configured paths and prevents path traversal.
 - `src/tarball.ts`: downloads tarballs and extracts regular files from `.tar.gz` archives.
 - `src/comparison.ts`: computes gzip sizes and per-file/totals deltas.
@@ -56,7 +58,7 @@ When asked to commit changes in this repository, use Conventional Commit message
 - Runtime dependencies should stay small. Prefer Node built-ins when they are clear and maintainable.
 - Do not assume the caller has installed dependencies at action runtime.
 - Do not build the target project inside the action; workflows should build artifacts before invoking this action.
-- Treat missing configured files as errors. A comparison report should only be produced from trustworthy inputs.
+- Treat missing configured local files and latest-release baseline files as errors. Historical previous-release missing files may be reported as incomplete context.
 
 ## Tarball And Path Handling
 
@@ -103,13 +105,13 @@ This repo uses OpenSpec for scoped changes.
 
 When implementing a spec-driven change, read proposal, design, specs, and tasks before editing. Mark tasks complete as they are implemented. If a change introduces or modifies requirements, sync the delta spec into `openspec/specs/` before archiving.
 
-The current tarball gzip behavior is captured in `openspec/specs/tarball-gzip-comparison/spec.md`.
+The current tarball gzip behavior is captured in `openspec/specs/tarball-gzip-comparison/spec.md`. Npm release baseline behavior is captured in `openspec/specs/npm-release-baselines/spec.md` after the corresponding change is archived.
 
 ## Workflow Lessons Learned
 
 - Keep action code modular early. A single `index.ts` becomes difficult to review once config parsing, tarball handling, path safety, gzip measurement, reporting, and GitHub outputs are all mixed together.
 - Preserve `path` as the local project root. New inputs should not overload it.
-- Treat the tarball URI as an explicit baseline contract. Do not add package-manager shorthand such as `npm:axios@latest` unless a spec/proposal calls for registry resolution.
+- Treat the npm package name as the release baseline contract. Do not add package-manager shorthand such as `npm:axios@latest` unless a spec/proposal calls for it.
 - Build comparison files on PRs from already-built local artifacts. On GitHub pull requests, the checkout/build represents the merge result when using the default PR merge ref.
 - Avoid target-size enforcement in the current capability. Reporting and enforcing are different product behaviors and should remain separate changes.
 - Keep `dist/index.js` synchronized with `src/`; otherwise the committed action will not match the reviewed TypeScript.

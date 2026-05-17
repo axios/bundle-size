@@ -8,7 +8,9 @@ import { test } from 'vitest';
 import { run } from '@/action';
 import type { ComparisonReport } from '@/types';
 
-const AXIOS_TARBALL_URL = 'https://registry.npmjs.org/axios/-/axios-1.12.2.tgz';
+const AXIOS_METADATA_URL = 'https://registry.npmjs.org/axios';
+const AXIOS_LATEST_TARBALL_URL = 'https://registry.npmjs.org/axios/-/axios-1.12.2.tgz';
+const AXIOS_PREVIOUS_TARBALL_URL = 'https://registry.npmjs.org/axios/-/axios-1.12.1.tgz';
 
 function writeOctal(buffer: Buffer, value: number, offset: number, length: number): void {
   const octal = value.toString(8).padStart(length - 1, '0');
@@ -89,7 +91,7 @@ async function withActionEnvironment<T>(
   const keys = [
     'GITHUB_OUTPUT',
     'INPUT_PATH',
-    'INPUT_TARBALL-URI',
+    'INPUT_PACKAGE-NAME',
     'INPUT_FILES',
     'INPUT_OUTPUT-FILE',
     'INPUT_COMMENT-PR',
@@ -129,7 +131,7 @@ async function withActionEnvironment<T>(
   }
 }
 
-test('run writes outputs and a comparison report for a mocked axios npm tarball', async () => {
+test('run writes outputs and a comparison report for mocked axios npm releases', async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-action-'));
   const outputFile = path.join(tempRoot, 'github-output.txt');
   const originalFetch = global.fetch;
@@ -140,15 +142,47 @@ test('run writes outputs and a comparison report for a mocked axios npm tarball'
     await writeFile(path.join(tempRoot, 'dist/axios.min.js'), 'current axios artifact');
     await writeFile(outputFile, '');
 
-    const archive = gzipSync(createTar([
+    const latestArchive = gzipSync(createTar([
       ['package/dist/axios.min.js', 'baseline axios artifact'],
+    ]));
+    const previousArchive = gzipSync(createTar([
+      ['package/dist/axios.min.js', 'previous axios artifact'],
     ]));
 
     global.fetch = async (uri) => {
-      assert.equal(uri, AXIOS_TARBALL_URL);
+      if (uri === AXIOS_METADATA_URL) {
+        return Response.json({
+          'dist-tags': { latest: '1.12.2' },
+          versions: {
+            '1.12.1': { dist: { tarball: AXIOS_PREVIOUS_TARBALL_URL } },
+            '1.12.2': { dist: { tarball: AXIOS_LATEST_TARBALL_URL } },
+          },
+          time: {
+            '1.12.1': '2025-09-01T00:00:00.000Z',
+            '1.12.2': '2025-09-02T00:00:00.000Z',
+          },
+        });
+      }
+
+      if (uri === AXIOS_LATEST_TARBALL_URL) {
+        return new Response(
+          latestArchive.buffer.slice(
+            latestArchive.byteOffset,
+            latestArchive.byteOffset + latestArchive.byteLength,
+          ),
+          {
+            status: 200,
+          },
+        );
+      }
+
+      assert.equal(uri, AXIOS_PREVIOUS_TARBALL_URL);
 
       return new Response(
-        archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength),
+        previousArchive.buffer.slice(
+          previousArchive.byteOffset,
+          previousArchive.byteOffset + previousArchive.byteLength,
+        ),
         {
           status: 200,
         },
@@ -159,7 +193,7 @@ test('run writes outputs and a comparison report for a mocked axios npm tarball'
       {
         GITHUB_OUTPUT: outputFile,
         INPUT_PATH: tempRoot,
-        'INPUT_TARBALL-URI': AXIOS_TARBALL_URL,
+        'INPUT_PACKAGE-NAME': 'axios',
         INPUT_FILES: 'dist/axios.min.js',
         'INPUT_OUTPUT-FILE': 'reports/comparison.json',
       },
@@ -180,7 +214,10 @@ test('run writes outputs and a comparison report for a mocked axios npm tarball'
     assert.equal(outputs.get('total-current-gzip-size'), String(report.totals.currentBytes));
     assert.equal(outputs.get('total-baseline-gzip-size'), String(report.totals.baselineBytes));
     assert.equal(outputs.get('total-delta-gzip-size'), String(report.totals.deltaBytes));
-    assert.equal(report.baseline.uri, AXIOS_TARBALL_URL);
+    assert.equal(report.packageName, 'axios');
+    assert.equal(report.baseline.version, '1.12.2');
+    assert.equal(report.baseline.uri, AXIOS_LATEST_TARBALL_URL);
+    assert.deepEqual(report.history.map((release) => release.version), ['1.12.2', '1.12.1']);
     assert.deepEqual(report.files.map((file) => file.path), ['dist/axios.min.js']);
   } finally {
     global.fetch = originalFetch;

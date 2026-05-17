@@ -1,6 +1,6 @@
 # Bundle Size Action
 
-A custom GitHub Action that compares gzip bundle sizes for built artifacts against matching files from a tarball baseline.
+A custom GitHub Action that compares gzip bundle sizes for built artifacts against matching files from npm release baselines.
 
 ---
 
@@ -47,8 +47,8 @@ There is no normal `lib/` workflow. Vite bundles the action directly from TypeSc
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
 | `path` | No | `.` | Path to the local project root containing built artifacts. |
-| `tarball-uri` | Yes | | HTTP(S) URI of the `.tar.gz` baseline archive to compare against. |
-| `files` | Yes | | Newline-delimited file paths to compare in the local project and tarball baseline. |
+| `package-name` | Yes | | npm package name whose latest and previous releases provide baseline archives. |
+| `files` | Yes | | Newline-delimited file paths to compare in the local project and npm release baselines. |
 | `output-file` | No | `bundle-size-comparison.json` | Path, relative to `path`, where the JSON comparison report will be written. |
 | `comment-pr` | No | `false` | Post or update a bundle size summary comment on pull requests. |
 | `github-token` | No | | GitHub token used to post pull request comments when `comment-pr` is enabled. |
@@ -60,8 +60,8 @@ There is no normal `lib/` workflow. Vite bundles the action directly from TypeSc
 | `size` | Total current gzip size in bytes for all compared files. |
 | `comparison-file` | Absolute path to the generated JSON comparison file. |
 | `total-current-gzip-size` | Total current gzip size in bytes for all compared files. |
-| `total-baseline-gzip-size` | Total baseline gzip size in bytes for all compared files. |
-| `total-delta-gzip-size` | Difference in gzip bytes between current and baseline totals. |
+| `total-baseline-gzip-size` | Total latest-release baseline gzip size in bytes for all compared files. |
+| `total-delta-gzip-size` | Difference in gzip bytes between current and latest-release baseline totals. |
 
 ---
 
@@ -84,7 +84,7 @@ steps:
     uses: axios/bundle-size@main
     with:
       path: '.'
-      tarball-uri: 'https://registry.npmjs.org/axios/-/axios-1.6.8.tgz'
+      package-name: 'axios'
       files: |
         dist/axios.js
         dist/axios.min.js
@@ -109,7 +109,7 @@ steps:
   - name: Compare Bundle Size
     uses: axios/bundle-size@main
     with:
-      tarball-uri: 'https://registry.npmjs.org/axios/-/axios-1.6.8.tgz'
+      package-name: 'axios'
       files: |
         dist/axios.js
         dist/axios.min.js
@@ -124,7 +124,9 @@ The comparison file is JSON:
 ```json
 {
   "metric": "gzip",
+  "packageName": "axios",
   "baseline": {
+    "version": "1.6.8",
     "uri": "https://registry.npmjs.org/axios/-/axios-1.6.8.tgz"
   },
   "localRoot": "/home/runner/work/project/project",
@@ -142,9 +144,44 @@ The comparison file is JSON:
     "currentBytes": 14512,
     "deltaBytes": 279,
     "deltaPercent": 1.96
-  }
+  },
+  "history": [
+    {
+      "version": "1.6.8",
+      "uri": "https://registry.npmjs.org/axios/-/axios-1.6.8.tgz",
+      "latest": true,
+      "complete": true,
+      "missingFiles": [],
+      "files": [
+        {
+          "path": "dist/axios.min.js",
+          "baselineBytes": 14233,
+          "currentBytes": 14512,
+          "deltaBytes": 279,
+          "deltaPercent": 1.96
+        }
+      ],
+      "totals": {
+        "baselineBytes": 14233,
+        "currentBytes": 14512,
+        "deltaBytes": 279,
+        "deltaPercent": 1.96
+      }
+    },
+    {
+      "version": "1.6.7",
+      "uri": "https://registry.npmjs.org/axios/-/axios-1.6.7.tgz",
+      "latest": false,
+      "complete": false,
+      "missingFiles": ["dist/axios.min.js"],
+      "files": [],
+      "totals": null
+    }
+  ]
 }
 ```
+
+The latest npm release is the primary baseline for top-level `baseline`, `files`, `totals`, and action outputs. The `history` array includes the latest release plus up to 10 previous stable releases ordered by npm publish time. Previous releases that do not contain every configured file are marked as incomplete instead of failing the action.
 
 Because this repository *is* the action, a workflow inside the same repo can reference it with `./` after preparing local files to compare:
 
@@ -152,7 +189,7 @@ Because this repository *is* the action, a workflow inside the same repo can ref
 - uses: ./
   with:
     path: 'bundle-size-fixture'
-    tarball-uri: 'https://registry.npmjs.org/is-number/-/is-number-7.0.0.tgz'
+    package-name: 'is-number'
     files: |
       index.js
 ```
@@ -222,17 +259,18 @@ node dist/index.js
 To simulate GitHub Actions inputs locally, set the corresponding environment variables before running:
 
 ```bash
-INPUT_PATH="." \
-INPUT_TARBALL_URI="https://registry.npmjs.org/axios/-/axios-1.6.8.tgz" \
-INPUT_FILES=$'dist/axios.js\ndist/axios.min.js' \
-node dist/index.js
+env \
+  'INPUT_PATH=.' \
+  'INPUT_PACKAGE-NAME=axios' \
+  INPUT_FILES=$'dist/axios.js\ndist/axios.min.js' \
+  node dist/index.js
 ```
 
 ---
 
 ## Current Behavior
 
-The action downloads the configured tarball, reads regular file entries, strips a single shared top-level directory such as `package/`, and compares the configured paths against local files under `path`. It measures gzip-compressed bytes for each file and writes a JSON report. It does not enforce budgets or target sizes.
+The action fetches npm registry metadata for `package-name`, resolves the `latest` dist-tag plus up to 10 previous stable releases, downloads each selected release tarball, reads regular file entries, strips a single shared top-level directory such as `package/`, and compares the configured paths against local files under `path`. It measures gzip-compressed bytes for each file and writes a JSON report. It does not enforce budgets or target sizes.
 
 Suggested next steps:
 
@@ -241,7 +279,7 @@ Suggested next steps:
 | Threshold validation             | Accept `max-size` input; call `core.setFailed` on breach   |
 | Artifact uploads                 | Use `actions/upload-artifact` to persist the size report   |
 | Multi-framework support          | Auto-detect `vite.config.*`, `webpack.config.*`, etc.      |
-| Package URI resolution           | Resolve package manager aliases such as `npm:axios@latest` |
+| Private registry auth            | Authenticate npm metadata and tarball requests             |
 
 ---
 

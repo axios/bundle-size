@@ -1,5 +1,5 @@
 name: 'Bundle Size Action'
-description: 'Compares local build artifact gzip sizes against matching files from a tarball baseline.'
+description: 'Compares local build artifact gzip sizes against matching files from npm release baselines.'
 author: 'axios'
 
 branding:
@@ -11,11 +11,11 @@ inputs:
     description: 'Path to the local project root containing built artifacts.'
     required: false
     default: '.'
-  tarball-uri:
-    description: 'HTTP(S) URI of the .tar.gz baseline archive to compare against.'
+  package-name:
+    description: 'npm package name whose latest and previous releases provide baseline archives.'
     required: true
   files:
-    description: 'Newline-delimited file paths to compare in the local project and tarball baseline.'
+    description: 'Newline-delimited file paths to compare in the local project and npm release baselines.'
     required: true
   output-file:
     description: 'Path, relative to the local project root, where the JSON comparison report will be written.'
@@ -37,9 +37,9 @@ outputs:
   total-current-gzip-size:
     description: 'Total current gzip size in bytes for all compared files.'
   total-baseline-gzip-size:
-    description: 'Total baseline gzip size in bytes for all compared files.'
+    description: 'Total latest-release baseline gzip size in bytes for all compared files.'
   total-delta-gzip-size:
-    description: 'Difference in gzip bytes between current and baseline totals.'
+    description: 'Difference in gzip bytes between current and latest-release baseline totals.'
 
 runs:
   using: 'node24'
