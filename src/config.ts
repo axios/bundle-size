@@ -31,12 +31,29 @@ export function validateNpmPackageName(packageName: string): string {
   return trimmedPackageName;
 }
 
+export function parseReleaseStream(releaseStream: string): number | undefined {
+  const trimmedReleaseStream = releaseStream.trim();
+
+  if (!trimmedReleaseStream) {
+    return undefined;
+  }
+
+  if (!/^\d+$/.test(trimmedReleaseStream)) {
+    throw new Error(`Invalid release-stream input: ${releaseStream}`);
+  }
+
+  return Number(trimmedReleaseStream);
+}
+
 export function getConfig(): ActionConfig {
   const localRoot = path.resolve(
     core.getInput("path", { required: false }) || ".",
   );
   const packageName = validateNpmPackageName(
     core.getInput("package-name", { required: true }),
+  );
+  const releaseStream = parseReleaseStream(
+    core.getInput("release-stream", { required: false }),
   );
   const filesInput = core
     .getMultilineInput("files", { required: true })
@@ -55,6 +72,7 @@ export function getConfig(): ActionConfig {
   return {
     localRoot,
     packageName,
+    releaseStream,
     filePaths: parseFilePaths(filesInput),
     outputFile,
     commentPr,

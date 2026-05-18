@@ -14,6 +14,9 @@ inputs:
   package-name:
     description: 'npm package name whose latest and previous releases provide baseline archives.'
     required: true
+  release-stream:
+    description: 'Optional leading major version number, such as 0 or 1, used to select npm release baselines from that release stream.'
+    required: false
   files:
     description: 'Newline-delimited file paths to compare in the local project and npm release baselines.'
     required: true
@@ -37,9 +40,9 @@ outputs:
   total-current-gzip-size:
     description: 'Total current gzip size in bytes for all compared files.'
   total-baseline-gzip-size:
-    description: 'Total latest-release baseline gzip size in bytes for all compared files.'
+    description: 'Total selected primary-release baseline gzip size in bytes for all compared files.'
   total-delta-gzip-size:
-    description: 'Difference in gzip bytes between current and latest-release baseline totals.'
+    description: 'Difference in gzip bytes between current and selected primary-release baseline totals.'
 
 runs:
   using: 'node24'

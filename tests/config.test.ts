@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { test } from 'vitest';
 
-import { getConfig, validateNpmPackageName } from '@/config';
+import { getConfig, parseReleaseStream, validateNpmPackageName } from '@/config';
 
 const INPUT_KEYS = [
   'INPUT_PATH',
   'INPUT_PACKAGE-NAME',
+  'INPUT_RELEASE-STREAM',
   'INPUT_TARBALL-URI',
   'INPUT_FILES',
   'INPUT_OUTPUT-FILE',
@@ -53,6 +54,18 @@ test('validateNpmPackageName rejects missing and invalid package names', () => {
   assert.throws(() => validateNpmPackageName('npm:axios@latest'), /Invalid npm package name/);
 });
 
+test('parseReleaseStream accepts empty and non-negative integer streams', () => {
+  assert.equal(parseReleaseStream(''), undefined);
+  assert.equal(parseReleaseStream(' 0 '), 0);
+  assert.equal(parseReleaseStream('1'), 1);
+});
+
+test('parseReleaseStream rejects non-integer and negative streams', () => {
+  assert.throws(() => parseReleaseStream('1.x'), /Invalid release-stream input/);
+  assert.throws(() => parseReleaseStream('1.0'), /Invalid release-stream input/);
+  assert.throws(() => parseReleaseStream('-1'), /Invalid release-stream input/);
+});
+
 test('getConfig reads defaults and parses multiline files input', async () => {
   await withInputs(
     {
@@ -63,6 +76,7 @@ test('getConfig reads defaults and parses multiline files input', async () => {
       assert.deepEqual(getConfig(), {
         localRoot: path.resolve('.'),
         packageName: 'axios',
+        releaseStream: undefined,
         filePaths: ['dist/a.js', 'dist/b.js'],
         outputFile: 'bundle-size-comparison.json',
         commentPr: false,
@@ -84,6 +98,7 @@ test('getConfig reads explicit path and output file inputs', async () => {
       assert.deepEqual(getConfig(), {
         localRoot: path.resolve('fixtures/project'),
         packageName: '@scope/package',
+        releaseStream: undefined,
         filePaths: ['dist/a.js'],
         outputFile: 'reports/result.json',
         commentPr: false,
@@ -105,6 +120,7 @@ test('getConfig reads PR comment inputs', async () => {
       assert.deepEqual(getConfig(), {
         localRoot: path.resolve('.'),
         packageName: 'axios',
+        releaseStream: undefined,
         filePaths: ['dist/a.js'],
         outputFile: 'bundle-size-comparison.json',
         commentPr: true,
@@ -123,6 +139,54 @@ test('getConfig requires github-token when PR comments are enabled', async () =>
     },
     () => {
       assert.throws(() => getConfig(), /github-token input is required/);
+    },
+  );
+});
+
+test('getConfig reads valid release stream inputs', async () => {
+  await withInputs(
+    {
+      'INPUT_PACKAGE-NAME': 'axios',
+      'INPUT_RELEASE-STREAM': '0',
+      INPUT_FILES: 'dist/a.js',
+    },
+    () => {
+      assert.equal(getConfig().releaseStream, 0);
+    },
+  );
+
+  await withInputs(
+    {
+      'INPUT_PACKAGE-NAME': 'axios',
+      'INPUT_RELEASE-STREAM': '1',
+      INPUT_FILES: 'dist/a.js',
+    },
+    () => {
+      assert.equal(getConfig().releaseStream, 1);
+    },
+  );
+});
+
+test('getConfig rejects invalid release stream inputs', async () => {
+  await withInputs(
+    {
+      'INPUT_PACKAGE-NAME': 'axios',
+      'INPUT_RELEASE-STREAM': 'latest',
+      INPUT_FILES: 'dist/a.js',
+    },
+    () => {
+      assert.throws(() => getConfig(), /Invalid release-stream input/);
+    },
+  );
+
+  await withInputs(
+    {
+      'INPUT_PACKAGE-NAME': 'axios',
+      'INPUT_RELEASE-STREAM': '-1',
+      INPUT_FILES: 'dist/a.js',
+    },
+    () => {
+      assert.throws(() => getConfig(), /Invalid release-stream input/);
     },
   );
 });

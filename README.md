@@ -52,6 +52,7 @@ There is no normal `lib/` workflow. Vite bundles the action directly from TypeSc
 |------|----------|---------|-------------|
 | `path` | No | `.` | Path to the local project root containing built artifacts. |
 | `package-name` | Yes | | npm package name whose latest and previous releases provide baseline archives. |
+| `release-stream` | No | | Optional leading major version number, such as `0` or `1`, used to select npm release baselines from that release stream. |
 | `files` | Yes | | Newline-delimited file paths to compare in the local project and npm release baselines. |
 | `output-file` | No | `bundle-size-comparison.json` | Path, relative to `path`, where the JSON comparison report will be written. |
 | `comment-pr` | No | `false` | Post or update a bundle size summary comment on pull requests. |
@@ -64,8 +65,8 @@ There is no normal `lib/` workflow. Vite bundles the action directly from TypeSc
 | `size` | Total current gzip size in bytes for all compared files. |
 | `comparison-file` | Absolute path to the generated JSON comparison file. |
 | `total-current-gzip-size` | Total current gzip size in bytes for all compared files. |
-| `total-baseline-gzip-size` | Total latest-release baseline gzip size in bytes for all compared files. |
-| `total-delta-gzip-size` | Difference in gzip bytes between current and latest-release baseline totals. |
+| `total-baseline-gzip-size` | Total selected primary-release baseline gzip size in bytes for all compared files. |
+| `total-delta-gzip-size` | Difference in gzip bytes between current and selected primary-release baseline totals. |
 
 ---
 
@@ -119,6 +120,26 @@ steps:
         dist/axios.min.js
       comment-pr: true
       github-token: ${{ github.token }}
+```
+
+To compare against a maintained major-version stream instead of the npm `latest` stream, set `release-stream` to the leading major version. For example, this compares the local build against the newest stable axios `1.x` release and up to 10 previous stable `1.x` releases, even if npm `latest` points to another major version:
+
+```yaml
+steps:
+  - name: Install dependencies
+    run: pnpm install --frozen-lockfile
+
+  - name: Build artifacts
+    run: pnpm run build
+
+  - name: Compare Bundle Size Against Axios 1.x
+    uses: axios/bundle-size@main
+    with:
+      package-name: 'axios'
+      release-stream: '1'
+      files: |
+        dist/axios.js
+        dist/axios.min.js
 ```
 
 When `comment-pr` is enabled outside a pull request event, the action writes the JSON report and skips commenting. Fork pull requests receive a read-only `GITHUB_TOKEN` regardless of the workflow's requested permissions; in that case the action logs a warning, skips commenting, and still produces the JSON report and outputs.
@@ -185,7 +206,7 @@ The comparison file is JSON:
 }
 ```
 
-The latest npm release is the primary baseline for top-level `baseline`, `files`, `totals`, and action outputs. The `history` array includes the latest release plus up to 10 previous stable releases ordered by npm publish time. Previous releases that do not contain every configured file are marked as incomplete instead of failing the action.
+When `release-stream` is omitted, the npm `latest` release is the primary baseline for top-level `baseline`, `files`, `totals`, and action outputs. The `history` array includes the latest release plus up to 10 previous stable releases ordered by npm publish time. When `release-stream` is configured, the newest stable release in that major-version stream is the primary baseline and `history` is limited to that stream; the report includes a top-level `releaseStream` number and pull request comments describe the configured stream. Previous releases that do not contain every configured file are marked as incomplete instead of failing the action.
 
 Because this repository *is* the action, a workflow inside the same repo can reference it with `./` after preparing local files to compare:
 
@@ -274,7 +295,7 @@ env \
 
 ## Current Behavior
 
-The action fetches npm registry metadata for `package-name`, resolves the `latest` dist-tag plus up to 10 previous stable releases, downloads each selected release tarball, reads regular file entries, strips a single shared top-level directory such as `package/`, and compares the configured paths against local files under `path`. It measures gzip-compressed bytes for each file and writes a JSON report. It does not enforce budgets or target sizes.
+The action fetches npm registry metadata for `package-name`, resolves either the `latest` dist-tag plus up to 10 previous stable releases or the configured `release-stream` plus up to 10 previous stable releases in that major version, downloads each selected release tarball, reads regular file entries, strips a single shared top-level directory such as `package/`, and compares the configured paths against local files under `path`. It measures gzip-compressed bytes for each file and writes a JSON report. It does not enforce budgets or target sizes.
 
 Suggested next steps:
 

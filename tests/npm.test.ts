@@ -44,6 +44,20 @@ test('selectNpmReleaseBaselines selects latest plus fewer than 10 previous relea
   assert.equal(releases[1].latest, false);
 });
 
+test('selectNpmReleaseBaselines preserves latest behavior without release stream', () => {
+  const releases = selectNpmReleaseBaselines(
+    'axios',
+    createMetadata(['0.27.2', '1.0.0', '1.1.0', '2.0.0'], '2.0.0'),
+  );
+
+  assert.deepEqual(releases.map((release) => release.version), [
+    '2.0.0',
+    '1.1.0',
+    '1.0.0',
+    '0.27.2',
+  ]);
+});
+
 test('selectNpmReleaseBaselines selects at most 10 previous stable releases', () => {
   const versions = Array.from({ length: 13 }, (_, index) => `1.${index}.0`);
   const releases = selectNpmReleaseBaselines('axios', createMetadata(versions));
@@ -71,6 +85,74 @@ test('selectNpmReleaseBaselines skips prerelease versions in previous releases',
   );
 
   assert.deepEqual(releases.map((release) => release.version), ['1.1.0', '1.0.0']);
+});
+
+test('selectNpmReleaseBaselines filters baselines to a release stream', () => {
+  const releases = selectNpmReleaseBaselines(
+    'axios',
+    createMetadata(['0.27.2', '1.0.0', '1.1.0', '2.0.0'], '2.0.0'),
+    1,
+  );
+
+  assert.deepEqual(releases.map((release) => release.version), ['1.1.0', '1.0.0']);
+  assert.equal(releases[0].latest, true);
+  assert.equal(releases[1].latest, false);
+});
+
+test('selectNpmReleaseBaselines uses newest stream release instead of npm latest', () => {
+  const releases = selectNpmReleaseBaselines(
+    'axios',
+    createMetadata(['0.27.2', '1.0.0', '1.1.0', '2.0.0'], '2.0.0'),
+    0,
+  );
+
+  assert.deepEqual(releases.map((release) => release.version), ['0.27.2']);
+  assert.equal(releases[0].latest, true);
+});
+
+test('selectNpmReleaseBaselines limits previous releases within the stream', () => {
+  const releases = selectNpmReleaseBaselines(
+    'axios',
+    createMetadata([
+      '1.0.0',
+      '2.0.0',
+      '1.1.0',
+      '1.2.0',
+      '1.3.0',
+      '1.4.0',
+      '1.5.0',
+      '1.6.0',
+      '1.7.0',
+      '1.8.0',
+      '1.9.0',
+      '1.10.0',
+      '1.11.0',
+      '1.12.0',
+    ]),
+    1,
+  );
+
+  assert.equal(releases.length, 11);
+  assert.deepEqual(releases.map((release) => release.version), [
+    '1.12.0',
+    '1.11.0',
+    '1.10.0',
+    '1.9.0',
+    '1.8.0',
+    '1.7.0',
+    '1.6.0',
+    '1.5.0',
+    '1.4.0',
+    '1.3.0',
+    '1.2.0',
+  ]);
+});
+
+test('selectNpmReleaseBaselines rejects streams with no stable matches', () => {
+  assert.throws(
+    () => selectNpmReleaseBaselines('axios', createMetadata(['1.0.0', '2.0.0']), 0),
+    /axios has no stable releases in release stream 0/,
+  );
 });
 
 test('selectNpmReleaseBaselines rejects missing latest metadata', () => {
@@ -102,7 +184,7 @@ test('resolveNpmReleaseBaselines fetches and parses npm metadata', async () => {
       return Response.json(createMetadata(['1.0.0', '1.1.0']));
     };
 
-    const releases = await resolveNpmReleaseBaselines('@scope/package');
+    const releases = await resolveNpmReleaseBaselines('@scope/package', 1);
 
     assert.equal(requestedUrl, 'https://registry.npmjs.org/%40scope%2Fpackage');
     assert.deepEqual(releases.map((release) => release.version), ['1.1.0', '1.0.0']);

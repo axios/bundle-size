@@ -86,6 +86,22 @@ function renderHistoryRow(release: ReleaseComparisonResult): string {
   return `| ${renderReleaseLabel(release)} | ${formatBytes(release.totals.baselineBytes)} | ${formatBytes(release.totals.currentBytes)} | ${formatDelta(release.totals.deltaBytes, release.totals.deltaPercent)} | ${statusEmoji(release.totals.deltaPercent)} |`;
 }
 
+function renderBaselineDescription(report: ComparisonReport): string {
+  if (report.releaseStream !== undefined) {
+    return `Compared current build against ${renderMarkdownCodeSpan(`${report.releaseStream}.x`)} release stream baseline ${renderMarkdownCodeSpan(report.baseline.version)} for ${renderMarkdownCodeSpan(report.packageName)}.`;
+  }
+
+  return `Compared current build against latest npm release ${renderMarkdownCodeSpan(report.baseline.version)} for ${renderMarkdownCodeSpan(report.packageName)}.`;
+}
+
+function renderHistorySummary(report: ComparisonReport): string {
+  if (report.releaseStream !== undefined) {
+    return `Historical comparison: ${report.releaseStream}.x release stream baselines`;
+  }
+
+  return "Historical comparison: latest + 10 previous npm releases";
+}
+
 export function renderBundleSizeComment(report: ComparisonReport): string {
   const rows = report.files.map(renderFileRow);
 
@@ -98,14 +114,14 @@ export function renderBundleSizeComment(report: ComparisonReport): string {
     "",
     "## Bundle Size Report",
     "",
-    `Compared current build against latest npm release ${renderMarkdownCodeSpan(report.baseline.version)} for ${renderMarkdownCodeSpan(report.packageName)}.`,
+    renderBaselineDescription(report),
     "",
     "| File | Baseline gzip | Current gzip | Difference | Status |",
     "|---|---:|---:|---:|:---:|",
     ...rows,
     "",
     "<details>",
-    "<summary>Historical comparison: latest + 10 previous npm releases</summary>",
+    `<summary>${renderHistorySummary(report)}</summary>`,
     "",
     "| Release | Baseline gzip | Current gzip | Difference | Status |",
     "|---|---:|---:|---:|:---:|",

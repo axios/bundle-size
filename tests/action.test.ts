@@ -11,6 +11,7 @@ import type { ComparisonReport } from '@/types';
 const AXIOS_METADATA_URL = 'https://registry.npmjs.org/axios';
 const AXIOS_LATEST_TARBALL_URL = 'https://registry.npmjs.org/axios/-/axios-1.12.2.tgz';
 const AXIOS_PREVIOUS_TARBALL_URL = 'https://registry.npmjs.org/axios/-/axios-1.12.1.tgz';
+const AXIOS_NEXT_TARBALL_URL = 'https://registry.npmjs.org/axios/-/axios-2.0.0.tgz';
 
 function writeOctal(buffer: Buffer, value: number, offset: number, length: number): void {
   const octal = value.toString(8).padStart(length - 1, '0');
@@ -92,6 +93,7 @@ async function withActionEnvironment<T>(
     'GITHUB_OUTPUT',
     'INPUT_PATH',
     'INPUT_PACKAGE-NAME',
+    'INPUT_RELEASE-STREAM',
     'INPUT_FILES',
     'INPUT_OUTPUT-FILE',
     'INPUT_COMMENT-PR',
@@ -219,6 +221,92 @@ test('run writes outputs and a comparison report for mocked axios npm releases',
     assert.equal(report.baseline.uri, AXIOS_LATEST_TARBALL_URL);
     assert.deepEqual(report.history.map((release) => release.version), ['1.12.2', '1.12.1']);
     assert.deepEqual(report.files.map((file) => file.path), ['dist/axios.min.js']);
+  } finally {
+    global.fetch = originalFetch;
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test('run resolves npm baselines from a configured release stream', async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-action-'));
+  const outputFile = path.join(tempRoot, 'github-output.txt');
+  const originalFetch = global.fetch;
+  let exitCode: number | string | null | undefined;
+
+  try {
+    await mkdir(path.join(tempRoot, 'dist'), { recursive: true });
+    await writeFile(path.join(tempRoot, 'dist/axios.min.js'), 'current axios artifact');
+    await writeFile(outputFile, '');
+
+    const streamLatestArchive = gzipSync(createTar([
+      ['package/dist/axios.min.js', 'stream baseline axios artifact'],
+    ]));
+    const previousArchive = gzipSync(createTar([
+      ['package/dist/axios.min.js', 'previous axios artifact'],
+    ]));
+
+    global.fetch = async (uri) => {
+      if (uri === AXIOS_METADATA_URL) {
+        return Response.json({
+          'dist-tags': { latest: '2.0.0' },
+          versions: {
+            '1.12.1': { dist: { tarball: AXIOS_PREVIOUS_TARBALL_URL } },
+            '1.12.2': { dist: { tarball: AXIOS_LATEST_TARBALL_URL } },
+            '2.0.0': { dist: { tarball: AXIOS_NEXT_TARBALL_URL } },
+          },
+          time: {
+            '1.12.1': '2025-09-01T00:00:00.000Z',
+            '1.12.2': '2025-09-02T00:00:00.000Z',
+            '2.0.0': '2025-10-01T00:00:00.000Z',
+          },
+        });
+      }
+
+      if (uri === AXIOS_LATEST_TARBALL_URL) {
+        return new Response(
+          streamLatestArchive.buffer.slice(
+            streamLatestArchive.byteOffset,
+            streamLatestArchive.byteOffset + streamLatestArchive.byteLength,
+          ),
+          { status: 200 },
+        );
+      }
+
+      assert.equal(uri, AXIOS_PREVIOUS_TARBALL_URL);
+
+      return new Response(
+        previousArchive.buffer.slice(
+          previousArchive.byteOffset,
+          previousArchive.byteOffset + previousArchive.byteLength,
+        ),
+        { status: 200 },
+      );
+    };
+
+    await withActionEnvironment(
+      {
+        GITHUB_OUTPUT: outputFile,
+        INPUT_PATH: tempRoot,
+        'INPUT_PACKAGE-NAME': 'axios',
+        'INPUT_RELEASE-STREAM': '1',
+        INPUT_FILES: 'dist/axios.min.js',
+        'INPUT_OUTPUT-FILE': 'reports/comparison.json',
+      },
+      async () => {
+        await run();
+        exitCode = process.exitCode;
+      },
+    );
+
+    assert.equal(exitCode, undefined);
+
+    const report = JSON.parse(
+      await readFile(path.join(tempRoot, 'reports/comparison.json'), 'utf8'),
+    ) as ComparisonReport;
+
+    assert.equal(report.releaseStream, 1);
+    assert.equal(report.baseline.version, '1.12.2');
+    assert.deepEqual(report.history.map((release) => release.version), ['1.12.2', '1.12.1']);
   } finally {
     global.fetch = originalFetch;
     await rm(tempRoot, { force: true, recursive: true });

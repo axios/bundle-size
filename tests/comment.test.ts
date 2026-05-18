@@ -109,6 +109,17 @@ test('renderBundleSizeComment renders historical release summary in details bloc
   assert.match(markdown, /<\/details>/);
 });
 
+test('renderBundleSizeComment describes release stream histories', () => {
+  const report = createReport();
+  report.releaseStream = 1;
+
+  const markdown = renderBundleSizeComment(report);
+
+  assert.match(markdown, /against `1\.x` release stream baseline `1\.2\.0` for `axios`/);
+  assert.match(markdown, /<summary>Historical comparison: 1\.x release stream baselines<\/summary>/);
+  assert.doesNotMatch(markdown, /latest \+ 10 previous npm releases/);
+});
+
 test('renderBundleSizeComment renders incomplete historical releases', () => {
   const report = createReport();
   report.history = [
