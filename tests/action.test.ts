@@ -231,6 +231,7 @@ test('run resolves npm baselines from a configured release stream', async () => 
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-action-'));
   const outputFile = path.join(tempRoot, 'github-output.txt');
   const originalFetch = global.fetch;
+  let exitCode: number | string | null | undefined;
 
   try {
     await mkdir(path.join(tempRoot, 'dist'), { recursive: true });
@@ -293,10 +294,11 @@ test('run resolves npm baselines from a configured release stream', async () => 
       },
       async () => {
         await run();
+        exitCode = process.exitCode;
       },
     );
 
-    assert.equal(process.exitCode, undefined);
+    assert.equal(exitCode, undefined);
 
     const report = JSON.parse(
       await readFile(path.join(tempRoot, 'reports/comparison.json'), 'utf8'),

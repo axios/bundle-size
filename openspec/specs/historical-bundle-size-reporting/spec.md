@@ -11,7 +11,7 @@ The action SHALL compare configured local artifacts against the selected primary
 - **WHEN** npm release resolution returns only the selected primary release
 - **THEN** the action still produces a successful primary-release comparison without requiring historical releases
 
-### Requirement: Latest Release Remains Primary Baseline
+### Requirement: Selected Release Remains Primary Baseline
 The action SHALL treat the selected npm release as the primary baseline for top-level report totals and action outputs.
 
 #### Scenario: Latest comparison succeeds
