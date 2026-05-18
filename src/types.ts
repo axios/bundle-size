@@ -26,6 +26,7 @@ export interface ReleaseComparisonResult {
 export interface ComparisonReport {
   metric: "gzip";
   packageName: string;
+  releaseStream?: number;
   baseline: {
     version: string;
     uri: string;
@@ -39,6 +40,7 @@ export interface ComparisonReport {
 export interface ActionConfig {
   localRoot: string;
   packageName: string;
+  releaseStream?: number;
   filePaths: string[];
   outputFile: string;
   commentPr: boolean;

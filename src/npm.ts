@@ -25,6 +25,12 @@ function isStableVersion(version: string): boolean {
   return !version.includes("-");
 }
 
+function getMajorVersion(version: string): number | null {
+  const match = /^(\d+)\./.exec(version);
+
+  return match ? Number(match[1]) : null;
+}
+
 function getTarballUri(
   packageName: string,
   version: string,
@@ -70,7 +76,35 @@ function getPublishedTime(
 export function selectNpmReleaseBaselines(
   packageName: string,
   metadata: NpmPackageMetadata,
+  releaseStream?: number,
 ): NpmReleaseBaseline[] {
+  if (releaseStream !== undefined) {
+    const streamReleases = Object.keys(metadata.versions ?? {})
+      .filter(
+        (version) =>
+          isStableVersion(version) && getMajorVersion(version) === releaseStream,
+      )
+      .map((version) => ({
+        version,
+        publishedAt: getPublishedTime(packageName, version, metadata),
+      }))
+      .sort((left, right) => right.publishedAt - left.publishedAt)
+      .slice(0, PREVIOUS_RELEASE_LIMIT + 1)
+      .map((release) => release.version);
+
+    if (streamReleases.length === 0) {
+      throw new Error(
+        `Npm package ${packageName} has no stable releases in release stream ${releaseStream}.`,
+      );
+    }
+
+    return streamReleases.map((version, index) => ({
+      version,
+      uri: getTarballUri(packageName, version, metadata),
+      latest: index === 0,
+    }));
+  }
+
   const latestVersion = metadata["dist-tags"]?.latest;
 
   if (
@@ -102,6 +136,7 @@ export function selectNpmReleaseBaselines(
 
 export async function resolveNpmReleaseBaselines(
   packageName: string,
+  releaseStream?: number,
 ): Promise<NpmReleaseBaseline[]> {
   const metadataUrl = getNpmPackageMetadataUrl(packageName);
   let response: Response;
@@ -129,5 +164,5 @@ export async function resolveNpmReleaseBaselines(
     );
   }
 
-  return selectNpmReleaseBaselines(packageName, metadata);
+  return selectNpmReleaseBaselines(packageName, metadata, releaseStream);
 }

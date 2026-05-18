@@ -38,6 +38,7 @@ export async function buildComparisonReport(
   packageName: string,
   filePaths: string[],
   releases: BaselineReleaseArchive[],
+  releaseStream?: number,
 ): Promise<ComparisonReport> {
   const [latestRelease] = releases;
 
@@ -56,12 +57,13 @@ export async function buildComparisonReport(
   const [latestComparison] = history;
 
   if (!latestComparison.totals) {
-    throw new Error(`Latest release comparison is incomplete: ${latestRelease.version}`);
+    throw new Error(`Primary release comparison is incomplete: ${latestRelease.version}`);
   }
 
   return {
     metric: "gzip",
     packageName,
+    releaseStream,
     baseline: {
       version: latestRelease.version,
       uri: latestRelease.uri,
@@ -88,7 +90,7 @@ async function buildReleaseComparison(
     if (!baselineContent) {
       if (strictMissingBaseline) {
         throw new Error(
-          `Baseline file not found in latest release ${release.version}: ${filePath}`,
+          `Baseline file not found in primary release ${release.version}: ${filePath}`,
         );
       }
 

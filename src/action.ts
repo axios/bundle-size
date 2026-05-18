@@ -17,9 +17,15 @@ export async function run(): Promise<void> {
 
     core.info(`Local project root: ${config.localRoot}`);
     core.info(`Npm package baseline: ${config.packageName}`);
+    if (config.releaseStream !== undefined) {
+      core.info(`Npm release stream baseline: ${config.releaseStream}.x`);
+    }
     core.info(`Comparing ${config.filePaths.length} file(s) using gzip size.`);
 
-    const releases = await resolveNpmReleaseBaselines(config.packageName);
+    const releases = await resolveNpmReleaseBaselines(
+      config.packageName,
+      config.releaseStream,
+    );
     core.info(`Resolved ${releases.length} npm release baseline(s).`);
 
     const releaseArchives = [];
@@ -39,6 +45,7 @@ export async function run(): Promise<void> {
       config.packageName,
       config.filePaths,
       releaseArchives,
+      config.releaseStream,
     );
     const outputPath = await writeComparisonReport(
       config.localRoot,

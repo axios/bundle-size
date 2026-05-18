@@ -87,6 +87,22 @@ test('writeComparisonReport writes pretty JSON with trailing newline', async () 
   }
 });
 
+test('writeComparisonReport preserves release stream metadata', async () => {
+  const localRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-'));
+
+  try {
+    const report = createReport();
+    report.releaseStream = 1;
+    const outputPath = await writeComparisonReport(localRoot, 'comparison.json', report);
+
+    const writtenReport = JSON.parse(await readFile(outputPath, 'utf8')) as ComparisonReport;
+    assert.equal(writtenReport.releaseStream, 1);
+    assert.equal(writtenReport.baseline.version, '1.2.0');
+  } finally {
+    await rm(localRoot, { force: true, recursive: true });
+  }
+});
+
 test('writeComparisonReport rejects unsafe output paths', async () => {
   const localRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-'));
 

@@ -114,7 +114,7 @@ test('buildComparisonReport fails when baseline file is missing', async () => {
           files: new Map(),
         },
       ]),
-      /Baseline file not found in latest release 1\.0\.0/,
+      /Baseline file not found in primary release 1\.0\.0/,
     );
   } finally {
     await rm(localRoot, { force: true, recursive: true });
