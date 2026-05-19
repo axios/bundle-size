@@ -117,172 +117,12 @@ steps:
         dist/axios.min.js
 ```
 
-The action does not post pull request comments itself. It writes both a JSON report and a Markdown report. The Markdown file contains the same body the built-in comment path used to post, including the hidden marker used for updates.
-
-For same-repository pull requests, add a follow-up step that reads the Markdown report and posts or updates the marked comment:
+The action does not post pull request comments. It writes both a JSON report and a Markdown report. The only safe way to surface the Markdown report from pull-request-controlled code is to append it to the GitHub Actions job summary:
 
 ```yaml
-on:
-  pull_request:
-
-permissions:
-  contents: read
-  pull-requests: write
-
-steps:
-  - name: Install dependencies
-    run: pnpm install --frozen-lockfile
-
-  - name: Build artifacts
-    run: pnpm run build
-
-  - name: Compare Bundle Size
-    uses: axios/bundle-size@main
-    with:
-      package-name: 'axios'
-      files: |
-        dist/axios.js
-        dist/axios.min.js
-
-  - name: Post Bundle Size Comment
-    uses: actions/github-script@v8
-    env:
-      BUNDLE_SIZE_MARKDOWN: bundle-size-comparison.md
-    with:
-      script: |
-        const fs = require('node:fs');
-
-        const marker = '<!-- axios-bundle-size-comment -->';
-        const issue_number = context.payload.pull_request?.number;
-        if (!issue_number) {
-          core.info('Skipping bundle size comment because this run is not for a pull request.');
-          return;
-        }
-
-        const { owner, repo } = context.repo;
-        const body = fs.readFileSync(process.env.BUNDLE_SIZE_MARKDOWN, 'utf8');
-        const comments = await github.paginate(github.rest.issues.listComments, {
-          owner,
-          repo,
-          issue_number,
-          per_page: 100,
-        });
-        const existing = comments.find((comment) => comment.body?.includes(marker));
-
-        if (existing) {
-          await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-        } else {
-          await github.rest.issues.createComment({ owner, repo, issue_number, body });
-        }
-```
-
-That same-workflow comment recipe does not bypass GitHub's public fork restrictions. Fork pull requests receive a read-only `GITHUB_TOKEN` in `pull_request` workflows regardless of requested permissions. For public repositories that accept fork PRs, run comparison without write credentials, upload the Markdown report, and publish the comment from a trusted `workflow_run` workflow.
-
-Comparison workflow:
-
-```yaml
-name: Bundle Size
-
-on:
-  pull_request:
-
-permissions:
-  contents: read
-
-jobs:
-  bundle-size:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build artifacts
-        run: pnpm run build
-
-      - name: Compare Bundle Size
-        uses: axios/bundle-size@main
-        with:
-          package-name: 'axios'
-          files: |
-            dist/axios.js
-            dist/axios.min.js
-
-      - name: Upload bundle size report
-        uses: actions/upload-artifact@v5
-        with:
-          name: bundle-size-report
-          path: bundle-size-comparison.md
-```
-
-Trusted comment workflow:
-
-```yaml
-name: Bundle Size Comment
-
-on:
-  workflow_run:
-    workflows: ['Bundle Size']
-    types: [completed]
-
-permissions:
-  actions: read
-  contents: read
-  pull-requests: write
-
-jobs:
-  comment:
-    if: >-
-      ${{ github.event.workflow_run.event == 'pull_request' &&
-          github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download bundle size report
-        uses: actions/download-artifact@v6
-        with:
-          name: bundle-size-report
-          path: bundle-size-report
-          github-token: ${{ github.token }}
-          run-id: ${{ github.event.workflow_run.id }}
-
-      - name: Post Bundle Size Comment
-        uses: actions/github-script@v8
-        env:
-          BUNDLE_SIZE_MARKDOWN: bundle-size-report/bundle-size-comparison.md
-        with:
-          script: |
-            const fs = require('node:fs');
-
-            const marker = '<!-- axios-bundle-size-comment -->';
-            const pr = context.payload.workflow_run.pull_requests[0];
-            if (!pr) {
-              core.info('Skipping bundle size comment because no pull request is associated with this workflow run.');
-              return;
-            }
-
-            const { owner, repo } = context.repo;
-            const pull = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
-            if (pull.data.head.sha !== context.payload.workflow_run.head_sha) {
-              core.info('Skipping stale bundle size comment for an outdated workflow run.');
-              return;
-            }
-
-            const issue_number = pr.number;
-            const body = fs.readFileSync(process.env.BUNDLE_SIZE_MARKDOWN, 'utf8');
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number,
-              per_page: 100,
-            });
-            const existing = comments.find((comment) => comment.body?.includes(marker));
-
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
+      - name: Add bundle size report to summary
+        if: always() && hashFiles('bundle-size-comparison.md') != ''
+        run: cat bundle-size-comparison.md >> "$GITHUB_STEP_SUMMARY"
 ```
 
 Do not use `pull_request_target` to checkout, install, build, or otherwise execute pull-request-controlled code with writable credentials. `pull_request_target` can be appropriate for trusted metadata-only automation, but bundle-size comparison requires building untrusted PR code before the report exists.
@@ -349,7 +189,7 @@ The JSON comparison file is machine-readable:
 }
 ```
 
-The Markdown comparison file is comment-ready and uses the same bundle-size report structure shown in the pull request examples above.
+The Markdown comparison file is ready to append to `$GITHUB_STEP_SUMMARY` and uses the same bundle-size report structure as the JSON report.
 
 When `release-stream` is omitted, the npm `latest` release is the primary baseline for top-level `baseline`, `files`, `totals`, and action outputs. The `history` array includes the latest release plus up to 10 previous stable releases ordered by npm publish time. When `release-stream` is configured, the newest stable release in that major-version stream is the primary baseline and `history` is limited to that stream; the JSON report includes a top-level `releaseStream` number and the Markdown report describes the configured stream. Previous releases that do not contain every configured file are marked as incomplete instead of failing the action.
 
