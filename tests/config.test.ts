@@ -11,8 +11,7 @@ const INPUT_KEYS = [
   'INPUT_TARBALL-URI',
   'INPUT_FILES',
   'INPUT_OUTPUT-FILE',
-  'INPUT_COMMENT-PR',
-  'INPUT_GITHUB-TOKEN',
+  'INPUT_MARKDOWN-OUTPUT-FILE',
 ];
 
 async function withInputs<T>(inputs: Record<string, string>, callback: () => T): Promise<T> {
@@ -22,8 +21,6 @@ async function withInputs<T>(inputs: Record<string, string>, callback: () => T):
     for (const key of INPUT_KEYS) {
       delete process.env[key];
     }
-
-    process.env['INPUT_COMMENT-PR'] = 'false';
 
     for (const [key, value] of Object.entries(inputs)) {
       process.env[key] = value;
@@ -79,8 +76,7 @@ test('getConfig reads defaults and parses multiline files input', async () => {
         releaseStream: undefined,
         filePaths: ['dist/a.js', 'dist/b.js'],
         outputFile: 'bundle-size-comparison.json',
-        commentPr: false,
-        githubToken: '',
+        markdownOutputFile: 'bundle-size-comparison.md',
       });
     },
   );
@@ -93,6 +89,7 @@ test('getConfig reads explicit path and output file inputs', async () => {
       'INPUT_PACKAGE-NAME': '@scope/package',
       INPUT_FILES: 'dist/a.js',
       'INPUT_OUTPUT-FILE': 'reports/result.json',
+      'INPUT_MARKDOWN-OUTPUT-FILE': 'reports/result.md',
     },
     () => {
       assert.deepEqual(getConfig(), {
@@ -101,44 +98,8 @@ test('getConfig reads explicit path and output file inputs', async () => {
         releaseStream: undefined,
         filePaths: ['dist/a.js'],
         outputFile: 'reports/result.json',
-        commentPr: false,
-        githubToken: '',
+        markdownOutputFile: 'reports/result.md',
       });
-    },
-  );
-});
-
-test('getConfig reads PR comment inputs', async () => {
-  await withInputs(
-    {
-      'INPUT_PACKAGE-NAME': 'axios',
-      INPUT_FILES: 'dist/a.js',
-      'INPUT_COMMENT-PR': 'true',
-      'INPUT_GITHUB-TOKEN': 'token-value',
-    },
-    () => {
-      assert.deepEqual(getConfig(), {
-        localRoot: path.resolve('.'),
-        packageName: 'axios',
-        releaseStream: undefined,
-        filePaths: ['dist/a.js'],
-        outputFile: 'bundle-size-comparison.json',
-        commentPr: true,
-        githubToken: 'token-value',
-      });
-    },
-  );
-});
-
-test('getConfig requires github-token when PR comments are enabled', async () => {
-  await withInputs(
-    {
-      'INPUT_PACKAGE-NAME': 'axios',
-      INPUT_FILES: 'dist/a.js',
-      'INPUT_COMMENT-PR': 'true',
-    },
-    () => {
-      assert.throws(() => getConfig(), /github-token input is required/);
     },
   );
 });
@@ -197,6 +158,19 @@ test('getConfig rejects invalid output file paths', async () => {
       'INPUT_PACKAGE-NAME': 'axios',
       INPUT_FILES: 'dist/a.js',
       'INPUT_OUTPUT-FILE': '../result.json',
+    },
+    () => {
+      assert.throws(() => getConfig(), /must be relative/);
+    },
+  );
+});
+
+test('getConfig rejects invalid markdown output file paths', async () => {
+  await withInputs(
+    {
+      'INPUT_PACKAGE-NAME': 'axios',
+      INPUT_FILES: 'dist/a.js',
+      'INPUT_MARKDOWN-OUTPUT-FILE': '../result.md',
     },
     () => {
       assert.throws(() => getConfig(), /must be relative/);

@@ -96,8 +96,7 @@ async function withActionEnvironment<T>(
     'INPUT_RELEASE-STREAM',
     'INPUT_FILES',
     'INPUT_OUTPUT-FILE',
-    'INPUT_COMMENT-PR',
-    'INPUT_GITHUB-TOKEN',
+    'INPUT_MARKDOWN-OUTPUT-FILE',
   ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
   const previousExitCode = process.exitCode;
@@ -108,8 +107,6 @@ async function withActionEnvironment<T>(
     for (const key of keys) {
       delete process.env[key];
     }
-
-    process.env['INPUT_COMMENT-PR'] = 'false';
 
     for (const [key, value] of Object.entries(env)) {
       process.env[key] = value;
@@ -198,6 +195,7 @@ test('run writes outputs and a comparison report for mocked axios npm releases',
         'INPUT_PACKAGE-NAME': 'axios',
         INPUT_FILES: 'dist/axios.min.js',
         'INPUT_OUTPUT-FILE': 'reports/comparison.json',
+        'INPUT_MARKDOWN-OUTPUT-FILE': 'reports/comparison.md',
       },
       async () => {
         await run();
@@ -209,9 +207,11 @@ test('run writes outputs and a comparison report for mocked axios npm releases',
 
     const outputs = parseGithubOutput(await readFile(outputFile, 'utf8'));
     const comparisonFile = path.join(tempRoot, 'reports/comparison.json');
+    const markdownFile = path.join(tempRoot, 'reports/comparison.md');
     const report = JSON.parse(await readFile(comparisonFile, 'utf8')) as ComparisonReport;
 
     assert.equal(outputs.get('comparison-file'), comparisonFile);
+    assert.equal(outputs.get('markdown-file'), markdownFile);
     assert.equal(outputs.get('size'), String(report.totals.currentBytes));
     assert.equal(outputs.get('total-current-gzip-size'), String(report.totals.currentBytes));
     assert.equal(outputs.get('total-baseline-gzip-size'), String(report.totals.baselineBytes));
@@ -221,6 +221,7 @@ test('run writes outputs and a comparison report for mocked axios npm releases',
     assert.equal(report.baseline.uri, AXIOS_LATEST_TARBALL_URL);
     assert.deepEqual(report.history.map((release) => release.version), ['1.12.2', '1.12.1']);
     assert.deepEqual(report.files.map((file) => file.path), ['dist/axios.min.js']);
+    assert.match(await readFile(markdownFile, 'utf8'), /## Bundle Size Report/);
   } finally {
     global.fetch = originalFetch;
     await rm(tempRoot, { force: true, recursive: true });

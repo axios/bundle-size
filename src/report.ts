@@ -16,3 +16,17 @@ export async function writeComparisonReport(
 
   return outputPath;
 }
+
+export async function writeMarkdownReport(
+  localRoot: string,
+  outputFile: string,
+  markdown: string,
+): Promise<string> {
+  const outputPath = resolveInsideRoot(localRoot, outputFile);
+  const outputDirectory = path.dirname(outputPath);
+
+  await mkdir(outputDirectory, { recursive: true });
+  await writeFile(outputPath, `${markdown}\n`, "utf8");
+
+  return outputPath;
+}

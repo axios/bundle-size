@@ -14,7 +14,6 @@ jobs:
     permissions:
       contents: read
       checks: write
-      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -98,5 +97,3 @@ jobs:
           files: |
             index.js
           output-file: "bundle-size-comparison.json"
-          comment-pr: true
-          github-token: ${{ github.token }}
