@@ -3,8 +3,7 @@ import { renderBundleSizeComment } from "@/comment";
 import { buildComparisonReport } from "@/comparison";
 import { getConfig } from "@/config";
 import { resolveNpmReleaseBaselines } from "@/npm";
-import { upsertPullRequestComment } from "@/pr-comment";
-import { writeComparisonReport } from "@/report";
+import { writeComparisonReport, writeMarkdownReport } from "@/report";
 import {
   createTarballFileMap,
   downloadTarball,
@@ -52,9 +51,16 @@ export async function run(): Promise<void> {
       config.outputFile,
       report,
     );
+    const markdownOutputPath = await writeMarkdownReport(
+      config.localRoot,
+      config.markdownOutputFile,
+      renderBundleSizeComment(report),
+    );
 
     core.info(`Wrote bundle size comparison file: ${outputPath}`);
+    core.info(`Wrote bundle size Markdown file: ${markdownOutputPath}`);
     core.setOutput("comparison-file", outputPath);
+    core.setOutput("markdown-file", markdownOutputPath);
     core.setOutput("size", String(report.totals.currentBytes));
     core.setOutput(
       "total-current-gzip-size",
@@ -65,13 +71,6 @@ export async function run(): Promise<void> {
       String(report.totals.baselineBytes),
     );
     core.setOutput("total-delta-gzip-size", String(report.totals.deltaBytes));
-
-    if (config.commentPr) {
-      await upsertPullRequestComment(
-        config.githubToken,
-        renderBundleSizeComment(report),
-      );
-    }
   } catch (error) {
     core.setFailed(error instanceof Error ? error.message : String(error));
   }

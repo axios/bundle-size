@@ -55,8 +55,7 @@ There is no normal `lib/` workflow. Vite bundles the action directly from TypeSc
 | `release-stream` | No | | Optional leading major version number, such as `0` or `1`, used to select npm release baselines from that release stream. |
 | `files` | Yes | | Newline-delimited file paths to compare in the local project and npm release baselines. |
 | `output-file` | No | `bundle-size-comparison.json` | Path, relative to `path`, where the JSON comparison report will be written. |
-| `comment-pr` | No | `false` | Post or update a bundle size summary comment on pull requests. |
-| `github-token` | No | | GitHub token used to post pull request comments when `comment-pr` is enabled. |
+| `markdown-output-file` | No | `bundle-size-comparison.md` | Path, relative to `path`, where the Markdown comparison report will be written. |
 
 ## Outputs
 
@@ -64,6 +63,7 @@ There is no normal `lib/` workflow. Vite bundles the action directly from TypeSc
 |------|-------------|
 | `size` | Total current gzip size in bytes for all compared files. |
 | `comparison-file` | Absolute path to the generated JSON comparison file. |
+| `markdown-file` | Absolute path to the generated Markdown comparison file. |
 | `total-current-gzip-size` | Total current gzip size in bytes for all compared files. |
 | `total-baseline-gzip-size` | Total selected primary-release baseline gzip size in bytes for all compared files. |
 | `total-delta-gzip-size` | Difference in gzip bytes between current and selected primary-release baseline totals. |
@@ -97,31 +97,6 @@ steps:
       output-file: 'bundle-size-comparison.json'
 ```
 
-To post the comparison directly on pull requests, enable `comment-pr` and provide a token with comment write permission:
-
-```yaml
-permissions:
-  contents: read
-  pull-requests: write
-
-steps:
-  - name: Install dependencies
-    run: pnpm install --frozen-lockfile
-
-  - name: Build artifacts
-    run: pnpm run build
-
-  - name: Compare Bundle Size
-    uses: axios/bundle-size@main
-    with:
-      package-name: 'axios'
-      files: |
-        dist/axios.js
-        dist/axios.min.js
-      comment-pr: true
-      github-token: ${{ github.token }}
-```
-
 To compare against a maintained major-version stream instead of the npm `latest` stream, set `release-stream` to the leading major version. For example, this compares the local build against the newest stable axios `1.x` release and up to 10 previous stable `1.x` releases, even if npm `latest` points to another major version:
 
 ```yaml
@@ -142,9 +117,177 @@ steps:
         dist/axios.min.js
 ```
 
-When `comment-pr` is enabled outside a pull request event, the action writes the JSON report and skips commenting. Fork pull requests receive a read-only `GITHUB_TOKEN` regardless of the workflow's requested permissions; in that case the action logs a warning, skips commenting, and still produces the JSON report and outputs.
+The action does not post pull request comments itself. It writes both a JSON report and a Markdown report. The Markdown file contains the same body the built-in comment path used to post, including the hidden marker used for updates.
 
-The comparison file is JSON:
+For same-repository pull requests, add a follow-up step that reads the Markdown report and posts or updates the marked comment:
+
+```yaml
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+steps:
+  - name: Install dependencies
+    run: pnpm install --frozen-lockfile
+
+  - name: Build artifacts
+    run: pnpm run build
+
+  - name: Compare Bundle Size
+    uses: axios/bundle-size@main
+    with:
+      package-name: 'axios'
+      files: |
+        dist/axios.js
+        dist/axios.min.js
+
+  - name: Post Bundle Size Comment
+    uses: actions/github-script@v8
+    env:
+      BUNDLE_SIZE_MARKDOWN: bundle-size-comparison.md
+    with:
+      script: |
+        const fs = require('node:fs');
+
+        const marker = '<!-- axios-bundle-size-comment -->';
+        const issue_number = context.payload.pull_request?.number;
+        if (!issue_number) {
+          core.info('Skipping bundle size comment because this run is not for a pull request.');
+          return;
+        }
+
+        const { owner, repo } = context.repo;
+        const body = fs.readFileSync(process.env.BUNDLE_SIZE_MARKDOWN, 'utf8');
+        const comments = await github.paginate(github.rest.issues.listComments, {
+          owner,
+          repo,
+          issue_number,
+          per_page: 100,
+        });
+        const existing = comments.find((comment) => comment.body?.includes(marker));
+
+        if (existing) {
+          await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+        } else {
+          await github.rest.issues.createComment({ owner, repo, issue_number, body });
+        }
+```
+
+That same-workflow comment recipe does not bypass GitHub's public fork restrictions. Fork pull requests receive a read-only `GITHUB_TOKEN` in `pull_request` workflows regardless of requested permissions. For public repositories that accept fork PRs, run comparison without write credentials, upload the Markdown report, and publish the comment from a trusted `workflow_run` workflow.
+
+Comparison workflow:
+
+```yaml
+name: Bundle Size
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle-size:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build artifacts
+        run: pnpm run build
+
+      - name: Compare Bundle Size
+        uses: axios/bundle-size@main
+        with:
+          package-name: 'axios'
+          files: |
+            dist/axios.js
+            dist/axios.min.js
+
+      - name: Upload bundle size report
+        uses: actions/upload-artifact@v5
+        with:
+          name: bundle-size-report
+          path: bundle-size-comparison.md
+```
+
+Trusted comment workflow:
+
+```yaml
+name: Bundle Size Comment
+
+on:
+  workflow_run:
+    workflows: ['Bundle Size']
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  comment:
+    if: >-
+      ${{ github.event.workflow_run.event == 'pull_request' &&
+          github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download bundle size report
+        uses: actions/download-artifact@v6
+        with:
+          name: bundle-size-report
+          path: bundle-size-report
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Post Bundle Size Comment
+        uses: actions/github-script@v8
+        env:
+          BUNDLE_SIZE_MARKDOWN: bundle-size-report/bundle-size-comparison.md
+        with:
+          script: |
+            const fs = require('node:fs');
+
+            const marker = '<!-- axios-bundle-size-comment -->';
+            const pr = context.payload.workflow_run.pull_requests[0];
+            if (!pr) {
+              core.info('Skipping bundle size comment because no pull request is associated with this workflow run.');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const pull = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+            if (pull.data.head.sha !== context.payload.workflow_run.head_sha) {
+              core.info('Skipping stale bundle size comment for an outdated workflow run.');
+              return;
+            }
+
+            const issue_number = pr.number;
+            const body = fs.readFileSync(process.env.BUNDLE_SIZE_MARKDOWN, 'utf8');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+```
+
+Do not use `pull_request_target` to checkout, install, build, or otherwise execute pull-request-controlled code with writable credentials. `pull_request_target` can be appropriate for trusted metadata-only automation, but bundle-size comparison requires building untrusted PR code before the report exists.
+
+The JSON comparison file is machine-readable:
 
 ```json
 {
@@ -206,7 +349,9 @@ The comparison file is JSON:
 }
 ```
 
-When `release-stream` is omitted, the npm `latest` release is the primary baseline for top-level `baseline`, `files`, `totals`, and action outputs. The `history` array includes the latest release plus up to 10 previous stable releases ordered by npm publish time. When `release-stream` is configured, the newest stable release in that major-version stream is the primary baseline and `history` is limited to that stream; the report includes a top-level `releaseStream` number and pull request comments describe the configured stream. Previous releases that do not contain every configured file are marked as incomplete instead of failing the action.
+The Markdown comparison file is comment-ready and uses the same bundle-size report structure shown in the pull request examples above.
+
+When `release-stream` is omitted, the npm `latest` release is the primary baseline for top-level `baseline`, `files`, `totals`, and action outputs. The `history` array includes the latest release plus up to 10 previous stable releases ordered by npm publish time. When `release-stream` is configured, the newest stable release in that major-version stream is the primary baseline and `history` is limited to that stream; the JSON report includes a top-level `releaseStream` number and the Markdown report describes the configured stream. Previous releases that do not contain every configured file are marked as incomplete instead of failing the action.
 
 Because this repository *is* the action, a workflow inside the same repo can reference it with `./` after preparing local files to compare:
 
@@ -295,7 +440,7 @@ env \
 
 ## Current Behavior
 
-The action fetches npm registry metadata for `package-name`, resolves either the `latest` dist-tag plus up to 10 previous stable releases or the configured `release-stream` plus up to 10 previous stable releases in that major version, downloads each selected release tarball, reads regular file entries, strips a single shared top-level directory such as `package/`, and compares the configured paths against local files under `path`. It measures gzip-compressed bytes for each file and writes a JSON report. It does not enforce budgets or target sizes.
+The action fetches npm registry metadata for `package-name`, resolves either the `latest` dist-tag plus up to 10 previous stable releases or the configured `release-stream` plus up to 10 previous stable releases in that major version, downloads each selected release tarball, reads regular file entries, strips a single shared top-level directory such as `package/`, and compares the configured paths against local files under `path`. It measures gzip-compressed bytes for each file and writes JSON and Markdown reports. It does not enforce budgets or target sizes.
 
 Suggested next steps:
 

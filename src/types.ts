@@ -43,8 +43,7 @@ export interface ActionConfig {
   releaseStream?: number;
   filePaths: string[];
   outputFile: string;
-  commentPr: boolean;
-  githubToken: string;
+  markdownOutputFile: string;
 }
 
 export interface NpmReleaseBaseline {

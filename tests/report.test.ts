@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'vitest';
 
-import { writeComparisonReport } from '@/report';
+import { writeComparisonReport, writeMarkdownReport } from '@/report';
 import type { ComparisonReport } from '@/types';
 
 function createReport(): ComparisonReport {
@@ -109,6 +109,32 @@ test('writeComparisonReport rejects unsafe output paths', async () => {
   try {
     await assert.rejects(
       writeComparisonReport(localRoot, '../comparison.json', createReport()),
+      /stay inside/,
+    );
+  } finally {
+    await rm(localRoot, { force: true, recursive: true });
+  }
+});
+
+test('writeMarkdownReport writes Markdown with trailing newline', async () => {
+  const localRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-'));
+
+  try {
+    const outputPath = await writeMarkdownReport(localRoot, 'reports/comparison.md', '## Report');
+
+    assert.equal(outputPath, path.join(localRoot, 'reports/comparison.md'));
+    assert.equal(await readFile(outputPath, 'utf8'), '## Report\n');
+  } finally {
+    await rm(localRoot, { force: true, recursive: true });
+  }
+});
+
+test('writeMarkdownReport rejects unsafe output paths', async () => {
+  const localRoot = await mkdtemp(path.join(os.tmpdir(), 'bundle-size-'));
+
+  try {
+    await assert.rejects(
+      writeMarkdownReport(localRoot, '../comparison.md', '## Report'),
       /stay inside/,
     );
   } finally {

@@ -98,6 +98,35 @@ test('renderBundleSizeComment renders files, totals, marker, sizes, and statuses
   assert.match(markdown, /\| \*\*Total\*\* \| \*\*3\.0 KiB\*\* \| \*\*3\.0 KiB\*\* \| \*\*-8 B \(-0\.26%\)\*\* \| \*\*🟢\*\* \|/);
 });
 
+test('renderBundleSizeComment preserves the documented Markdown contract', () => {
+  assert.equal(
+    renderBundleSizeComment(createReport()),
+    [
+      BUNDLE_SIZE_COMMENT_MARKER,
+      '',
+      '## Bundle Size Report',
+      '',
+      'Compared current build against latest npm release `1.2.0` for `axios`.',
+      '',
+      '| File | Baseline gzip | Current gzip | Difference | Status |',
+      '|---|---:|---:|---:|:---:|',
+      '| `dist/a.js` | 1.0 KiB | 1.0 KiB | 30 B (+2.93%) | 🔵 |',
+      '| `dist/b.js` | 2.0 KiB | 2.0 KiB | -38 B (-1.86%) | 🟢 |',
+      '| **Total** | **3.0 KiB** | **3.0 KiB** | **-8 B (-0.26%)** | **🟢** |',
+      '',
+      '<details>',
+      '<summary>Historical comparison: latest + 10 previous npm releases</summary>',
+      '',
+      '| Release | Baseline gzip | Current gzip | Difference | Status |',
+      '|---|---:|---:|---:|:---:|',
+      '| `1.2.0` latest | 3.0 KiB | 3.0 KiB | -8 B (-0.26%) | 🟢 |',
+      '| `1.1.0` | 2.9 KiB | 3.0 KiB | 64 B (+2.13%) | 🔵 |',
+      '',
+      '</details>',
+    ].join('\n'),
+  );
+});
+
 test('renderBundleSizeComment renders historical release summary in details block', () => {
   const markdown = renderBundleSizeComment(createReport());
 

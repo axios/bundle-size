@@ -40,8 +40,7 @@ Give extra scrutiny to changes involving:
 - `src/paths.ts` path normalization or containment checks.
 - `src/tarball.ts` archive download, decompression, parsing, entry type handling, or file lookup behavior.
 - `src/report.ts` report output paths and report contents.
-- `src/comment.ts` Markdown rendering and escaping.
-- `src/pr-comment.ts` GitHub API calls, token usage, event parsing, or permission handling.
+- `src/comment.ts` Markdown rendering and escaping used by documentation examples.
 - `action.yml` inputs, outputs, runtime version, or entrypoint.
 - Workflow permissions, third-party actions, or dependency updates.
 

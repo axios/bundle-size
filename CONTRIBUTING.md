@@ -40,14 +40,14 @@ Keep `src/index.ts` thin. Prefer focused modules for behavior:
 - `src/paths.ts`: path normalization and traversal protection.
 - `src/tarball.ts`: tarball download and parsing.
 - `src/comparison.ts`: gzip size calculation and report construction.
-- `src/report.ts`: JSON report writing.
-- `src/comment.ts` and `src/pr-comment.ts`: optional pull request comments.
+- `src/report.ts`: JSON and Markdown report writing.
+- `src/comment.ts`: Markdown rendering kept in sync with the documented pull request comment recipe.
 
 ## Making Changes
 
 - Keep changes small and focused.
 - Add or update tests for behavior changes.
-- Preserve the JSON report as machine-readable output.
+- Preserve the JSON report as machine-readable output and the Markdown report as comment-ready output.
 - Treat configured paths, npm metadata, tarball contents, and pull request input as untrusted.
 - Avoid new runtime dependencies unless there is a clear need.
 - Do not make the action build the caller's project; workflows should build artifacts before invoking this action.
@@ -82,8 +82,7 @@ Security-sensitive changes should include tests for relevant edge cases, especia
 - Tarball path normalization and package-root stripping.
 - Missing local or baseline files.
 - Malformed or truncated tarball entries.
-- Markdown escaping in pull request comments.
-- Token permission failures when PR comments are enabled.
+- Markdown escaping in the generated pull request comment Markdown.
 
 ## OpenSpec Changes
 
@@ -106,7 +105,7 @@ Important security expectations:
 - Keep local reads and report writes inside the configured `path` root.
 - Do not extract tarball entries to disk.
 - Treat tarball bytes and tar entry metadata as untrusted.
-- Keep `github-token` out of logs, reports, outputs, and comments.
+- Treat generated reports as untrusted input when external workflows publish comments from public fork runs.
 - Prefer immutable `https:` baseline tarball URLs in examples and workflows.
 - Keep GitHub workflow permissions minimal.
 

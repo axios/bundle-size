@@ -43,7 +43,7 @@ In scope examples:
 
 - Path traversal that reads or writes outside the configured `path` root.
 - Tarball parsing flaws that allow workspace overwrite, unexpected file selection, or denial of service.
-- Leaks of `github-token`, `GITHUB_TOKEN`, or other secrets through logs, reports, outputs, or comments.
+- Leaks of `GITHUB_TOKEN` or other secrets through logs, reports, outputs, or comments.
 - Pull request comment injection that can mislead reviewers or expose sensitive data.
 - Runtime bundle divergence that causes reviewed source to differ from executed action behavior.
 - Workflow permission weaknesses in this repository's own CI configuration.
@@ -59,8 +59,8 @@ Out of scope examples:
 
 - Configure the intended npm `package-name` and review reports for the resolved latest release version.
 - Keep `files` and `output-file` relative to the configured `path` root.
-- Use minimal workflow permissions. JSON-only comparisons should not need write permissions.
-- Enable `comment-pr` only when PR comments are needed, and pass the default `${{ github.token }}` unless a stronger token is strictly required.
+- Use minimal workflow permissions. Generating reports should not need write permissions.
+- Publish PR comments from external workflow steps that read the Markdown report. For public fork PRs, use a trusted `workflow_run` workflow rather than running PR-controlled code with writable credentials.
 - Do not include generated files that may contain secrets in the configured `files` list.
 - Pin third-party actions in workflows and avoid persisting checkout credentials unless needed.
 

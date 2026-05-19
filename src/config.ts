@@ -62,12 +62,10 @@ export function getConfig(): ActionConfig {
     core.getInput("output-file", { required: false }) ||
       "bundle-size-comparison.json",
   );
-  const commentPr = core.getBooleanInput("comment-pr", { required: false });
-  const githubToken = core.getInput("github-token", { required: false });
-
-  if (commentPr && !githubToken) {
-    throw new Error("The github-token input is required when comment-pr is enabled.");
-  }
+  const markdownOutputFile = normalizeConfiguredPath(
+    core.getInput("markdown-output-file", { required: false }) ||
+      "bundle-size-comparison.md",
+  );
 
   return {
     localRoot,
@@ -75,7 +73,6 @@ export function getConfig(): ActionConfig {
     releaseStream,
     filePaths: parseFilePaths(filesInput),
     outputFile,
-    commentPr,
-    githubToken,
+    markdownOutputFile,
   };
 }
