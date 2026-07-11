@@ -22,7 +22,7 @@
     "@actions/core": "^3.0.1"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.0",
     "@vitest/coverage-v8": "4.1.9",
     "oxlint": "1.71.0",
     "rimraf": "^6.1.3",
