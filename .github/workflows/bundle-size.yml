@@ -87,10 +87,9 @@ jobs:
           printf 'module.exports = true;\n' > bundle-size-fixture/index.js
 
       # Run the bundle-size action that lives in this repository.
-      # Because the action is defined here, we reference it with the
-      # special `./` prefix so GitHub Actions resolves it locally.
+      # GitHub's dedicated `$/` syntax resolves it from this repository.
       - name: Run Bundle Size Action
-        uses: ./
+        uses: $/
         with:
           path: "bundle-size-fixture"
           package-name: "is-number"
